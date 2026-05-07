@@ -196,6 +196,7 @@ Window {
 
                 // CN definition — instant hide, animated reveal
                 Text {
+                    id: cnDefText
                     width: parent.width
                     text: rootWin.definitionText() || "暂无释义"
                     color: "#F1F5F9"
@@ -203,8 +204,8 @@ Window {
                     wrapMode: Text.WordWrap
                     state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
                     states: [
-                        State { name: "hidden"; PropertyChanges { opacity: 0.0 } },
-                        State { name: "shown";  PropertyChanges { opacity: 1.0 } }
+                        State { name: "hidden"; PropertyChanges { target: cnDefText; opacity: 0.0 } },
+                        State { name: "shown";  PropertyChanges { target: cnDefText; opacity: 1.0 } }
                     ]
                     transitions: Transition {
                         from: "hidden"; to: "shown"
@@ -237,10 +238,11 @@ Window {
                             color: "#F1F5F9"
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
+                            id: cnExText
                             state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
                             states: [
-                                State { name: "hidden"; PropertyChanges { opacity: 0.0 } },
-                                State { name: "shown";  PropertyChanges { opacity: 1.0 } }
+                                State { name: "hidden"; PropertyChanges { target: cnExText; opacity: 0.0 } },
+                                State { name: "shown";  PropertyChanges { target: cnExText; opacity: 1.0 } }
                             ]
                             transitions: Transition {
                                 from: "hidden"; to: "shown"
