@@ -63,7 +63,7 @@ Window {
         id: container
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
 
-        readonly property int barH: Math.round(40 * rootWin.sf)
+        readonly property int barH: Math.round(28 * rootWin.sf)
         property bool open: false
         property real _maskH: 0
 
@@ -284,12 +284,13 @@ Window {
                         }
                     }
 
-                    // Next review hint — shows below buttons when any is hovered
+                    // Next review hint — always occupies height, text is empty when no hover
                     Text {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
-                        visible: rootWin._hoveredRating > 0 && rootWin.nextDaysFor(rootWin._hoveredRating) > 0
-                        text: visible ? ("下次 " + rootWin.nextDaysFor(rootWin._hoveredRating) + " 天后") : ""
+                        text: (rootWin._hoveredRating > 0 && rootWin.nextDaysFor(rootWin._hoveredRating) > 0)
+                              ? ("下次 " + rootWin.nextDaysFor(rootWin._hoveredRating) + " 天后")
+                              : " "
                         color: "#64748B"
                         font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                     }
@@ -347,35 +348,32 @@ Window {
                     onCanceled: dragging = false
                 }
 
-                // Passive word: two-line layout
-                Column {
+                // Passive word: single-line layout
+                Row {
                     anchors {
                         left: parent.left; leftMargin: Math.round(10 * rootWin.sf)
                         verticalCenter: parent.verticalCenter
                     }
-                    spacing: Math.round(1 * rootWin.sf)
-
-                    Row {
-                        spacing: Math.round(6 * rootWin.sf)
-                        Text {
-                            text: passiveWord.word || "—"
-                            color: "#F1F5F9"
-                            font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
-                        }
-                        Text {
-                            text: passiveWord.phonetic ? "/" + passiveWord.phonetic + "/" : ""
-                            color: "#94A3B8"
-                            font { pixelSize: rootWin._fs; family: "Consolas" }
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
+                    spacing: Math.round(8 * rootWin.sf)
 
                     Text {
-                        text: passiveWord.definition || ""
+                        text: passiveWord.word || "—"
+                        color: "#F1F5F9"
+                        font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                    }
+                    Text {
+                        text: passiveWord.phonetic ? "/" + passiveWord.phonetic + "/" : ""
                         color: "#94A3B8"
+                        font { pixelSize: rootWin._fs; family: "Consolas" }
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: passiveWord.definition || ""
+                        color: "#64748B"
                         font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                         elide: Text.ElideRight
                         width: barArea.width - Math.round(20 * rootWin.sf)
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }
