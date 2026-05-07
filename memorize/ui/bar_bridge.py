@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 class BarBridge(QObject):
     # Python → QML
-    wordChanged = Signal("QVariantMap")      # emits word dict when displayed word changes
+    wordChanged = Signal(object)              # emits word dict when displayed word changes
     expandTriggered = Signal()               # active reminder: auto-expand popup
     collapseTriggered = Signal()             # active reminder: auto-collapse popup
     maskHeightChanged = Signal(int)          # win32 mask update
