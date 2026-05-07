@@ -44,7 +44,8 @@ class BarWindow:
         self._saved_x = saved_x
         self._own_hwnd = 0
         self._pending_visible_h: int = 0
-        self._on_ready = on_ready  # called once after win32 setup completes
+        self._on_ready = on_ready
+        self._setup_retries = 0
 
         sf = _get_ui_scale()
         self._bar_w = int(_BASE_BAR_W * sf)
@@ -88,7 +89,14 @@ class BarWindow:
     def _setup_win32(self) -> None:
         hwnd = int(self._win.winId())
         if not hwnd:
-            QTimer.singleShot(200, self._setup_win32)
+            self._setup_retries += 1
+            if self._setup_retries < 5:
+                QTimer.singleShot(200, self._setup_win32)
+            else:
+                # Window never became ready; fire on_ready anyway so app isn't stuck
+                if self._on_ready:
+                    self._on_ready()
+                    self._on_ready = None
             return
         self._own_hwnd = hwnd
         setup_toolwindow(self._own_hwnd)

@@ -75,10 +75,8 @@ class MemorizeApp:
         self._tray.setContextMenu(self._tray_menu)
         self._tray.show()
 
-        if self._config.passive_mode:
-            self._word_timer.start()
-        if self._config.active_mode:
-            self._remind_timer.start()
+        # Timers start in _push_current_word (on_ready) so they never
+        # fire before the first word has been pushed to QML.
 
     # ── Public methods (called by bridge) ─────────────────────────────────────
 
@@ -134,6 +132,10 @@ class MemorizeApp:
     def _push_current_word(self) -> None:
         word = self._scheduler.current_word()
         self._bridge.push_word(self._word_to_payload(word))
+        if self._config.passive_mode:
+            self._word_timer.start()
+        if self._config.active_mode:
+            self._remind_timer.start()
 
     def _advance_and_push(self) -> None:
         word = self._scheduler.advance()
