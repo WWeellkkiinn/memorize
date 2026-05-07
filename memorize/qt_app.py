@@ -94,6 +94,7 @@ class MemorizeApp:
     def on_hover_enter(self) -> None:
         self._hover_active = True
         self._word_timer.stop()
+        self._dismiss_timer.stop()
 
     def on_hover_leave(self) -> None:
         self._hover_active = False

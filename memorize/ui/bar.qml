@@ -49,7 +49,12 @@ Window {
         target: bridge
         function onWordChanged(w)          { rootWin.word = w }
         function onPassiveWordChanged(w)   { rootWin.passiveWord = w }
-        function onExpandTriggered()       { container.open = true }
+        function onExpandTriggered() {
+            container.open = true
+            rootWin._revealPhase = 1
+            rootWin._hoveredRating = 0
+            revealTimer.restart()
+        }
         function onCollapseTriggered()     { container.open = false }
     }
 
@@ -79,6 +84,7 @@ Window {
                 bridge.setVisibleHeight(height)
             } else {
                 rootWin._revealPhase = 0
+                rootWin._hoveredRating = 0
                 revealTimer.stop()
                 maskShrinkTimer.restart()
             }
