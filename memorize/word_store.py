@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS cards (
     due                TEXT NOT NULL,
     stability          REAL NOT NULL DEFAULT 0.0,
     reps               INTEGER NOT NULL DEFAULT 0,
-    introduced_date    TEXT NOT NULL DEFAULT (date('now'))
+    introduced_date    TEXT DEFAULT NULL
 )
 """
 
@@ -190,12 +190,22 @@ class WordStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def mark_introduced(self, word_id: int) -> None:
+        """Record today as the introduction date for a new word (idempotent)."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE cards SET introduced_date=? WHERE word_id=? AND introduced_date IS NULL",
+                (today, word_id),
+            )
+            conn.commit()
+
     def count_introduced_today(self) -> int:
-        """Count words whose introduced_date is today (local date)."""
+        """Count words introduced today (regardless of whether they've been rated)."""
         today = datetime.now().strftime("%Y-%m-%d")
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT COUNT(*) AS n FROM cards WHERE introduced_date=? AND reps=0",
+                "SELECT COUNT(*) AS n FROM cards WHERE introduced_date=?",
                 (today,),
             ).fetchone()
         return row["n"] if row else 0
