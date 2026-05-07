@@ -14,19 +14,15 @@ Window {
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
     property int _revealPhase: 0
-    readonly property int _revealSeconds: 3   // single source of truth for reveal delay
-    property int _countdown: _revealSeconds
+    readonly property int _revealSeconds: 3
 
     function resetReveal() {
         _revealPhase = 1
-        _countdown = _revealSeconds
         revealTimer.restart()
-        countdownTimer.restart()
     }
     function doReveal() {
         _revealPhase = 2
         revealTimer.stop()
-        countdownTimer.stop()
     }
 
     // Style helpers
@@ -90,9 +86,7 @@ Window {
                 bridge.setVisibleHeight(height)
             } else {
                 rootWin._revealPhase = 0
-                rootWin._countdown = rootWin._revealSeconds
                 revealTimer.stop()
-                countdownTimer.stop()
                 maskShrinkTimer.restart()
             }
         }
@@ -115,13 +109,7 @@ Window {
 
         Timer { id: leaveTimer;      interval: 300;  onTriggered: container.open = false }
         Timer { id: maskShrinkTimer; interval: 300;  onTriggered: { container._maskH = container.barH; bridge.setVisibleHeight(container.barH) } }
-        Timer { id: revealTimer;     interval: rootWin._revealSeconds * 1000; onTriggered: rootWin.doReveal() }
-        Timer {
-            id: countdownTimer
-            interval: 1000
-            repeat: true
-            onTriggered: { if (rootWin._countdown > 1) rootWin._countdown-- }
-        }
+        Timer { id: revealTimer; interval: rootWin._revealSeconds * 1000; onTriggered: rootWin.doReveal() }
 
         // ── Main rect ─────────────────────────────────────────────────────────
         Rectangle {
@@ -254,16 +242,7 @@ Window {
                     }
                 }
 
-                // Phase 1 hint only — hidden in phase 2
-                Text {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    visible: rootWin._revealPhase === 1
-                    height: visible ? implicitHeight : 0
-                    text: "单击查看答案，" + rootWin._countdown + " 秒后自动揭示"
-                    color: "#475569"
-                    font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
-                }
+
             }
 
             // Click-to-reveal overlay — covers entire popup above barArea (phase 1 only)
