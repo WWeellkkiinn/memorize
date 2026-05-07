@@ -123,14 +123,26 @@ python install.py
 
 ```json
 {
-  "passive_mode": true,          // 开启被动模式（底部条自动轮换单词）
-  "active_mode": true,           // 开启主动提醒（定时自动弹出）
+  "passive_mode": true,           // 开启被动模式（底部条自动轮换单词）
+  "active_mode": true,            // 开启主动提醒（定时自动弹出）
   "word_change_interval_sec": 60, // 底部条多少秒换一个词
-  "reminder_interval_min": 30,   // 主动提醒间隔（分钟）
-  "auto_dismiss_sec": 8,         // 主动弹出后多少秒没操作自动收起
-  "daily_new_words": 20          // 每天最多引入多少个新词
+  "reminder_interval_min": 30,    // 主动提醒间隔（分钟）
+  "auto_dismiss_sec": 8           // 主动弹出后多少秒没操作自动收起
 }
 ```
+
+---
+
+## 进阶：个性化记忆曲线
+
+用了一段时间、积累了几百条复习记录后，可以用你自己的数据重新拟合 FSRS 参数，让算法更贴合你的记忆规律：
+
+```
+pip install torch pandas
+python scripts/optimize.py
+```
+
+完成后重启应用即可生效。至少需要 512 条跨天复习记录才有意义（数据不足时自动回退到默认参数）。
 
 ---
 
@@ -145,7 +157,8 @@ memorize/
 ├── data/
 │   └── cet6.json         # 词库数据（需自行下载放入）
 ├── scripts/
-│   └── import_words.py   # 导入单词表
+│   ├── import_words.py   # 导入单词表
+│   └── optimize.py       # 用个人复习记录优化 FSRS 参数（需 torch + pandas）
 └── memorize/
     ├── config.py         # 配置
     ├── word_store.py     # SQLite 词库
