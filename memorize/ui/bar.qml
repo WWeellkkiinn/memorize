@@ -254,12 +254,13 @@ Window {
                     }
                 }
 
-                // Bottom hint — stable height, text changes per phase
+                // Phase 1 hint only — hidden in phase 2
                 Text {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    // phase 1: instruction; phase 2: empty placeholder (keeps height)
-                    text: rootWin._revealPhase === 1 ? ("单击查看答案，" + rootWin._countdown + " 秒后自动揭示") : " "
+                    visible: rootWin._revealPhase === 1
+                    height: visible ? implicitHeight : 0
+                    text: "单击查看答案，" + rootWin._countdown + " 秒后自动揭示"
                     color: "#475569"
                     font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                 }
