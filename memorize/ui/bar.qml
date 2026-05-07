@@ -14,6 +14,7 @@ Window {
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
     property int _revealPhase: 0
+    property int _countdown: 3
 
     // Style helpers
     readonly property int _fs:   Math.round(11 * sf)
@@ -41,14 +42,18 @@ Window {
             rootWin.word = w
             if (container.open) {
                 rootWin._revealPhase = 1
+                rootWin._countdown = 3
                 revealTimer.restart()
+                countdownTimer.restart()
             }
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
         function onExpandTriggered() {
             container.open = true
             rootWin._revealPhase = 1
+            rootWin._countdown = 3
             revealTimer.restart()
+            countdownTimer.restart()
         }
         function onCollapseTriggered()   { container.open = false }
     }
@@ -73,13 +78,17 @@ Window {
         onOpenChanged: {
             if (open) {
                 rootWin._revealPhase = 1
+                rootWin._countdown = 3
                 revealTimer.start()
+                countdownTimer.restart()
                 maskShrinkTimer.stop()
                 _maskH = height
                 bridge.setVisibleHeight(height)
             } else {
                 rootWin._revealPhase = 0
+                rootWin._countdown = 3
                 revealTimer.stop()
+                countdownTimer.stop()
                 maskShrinkTimer.restart()
             }
         }
@@ -103,6 +112,12 @@ Window {
         Timer { id: leaveTimer;      interval: 300;  onTriggered: container.open = false }
         Timer { id: maskShrinkTimer; interval: 300;  onTriggered: { container._maskH = container.barH; bridge.setVisibleHeight(container.barH) } }
         Timer { id: revealTimer;     interval: 3000; onTriggered: rootWin._revealPhase = 2 }
+        Timer {
+            id: countdownTimer
+            interval: 1000
+            repeat: true
+            onTriggered: { if (rootWin._countdown > 1) rootWin._countdown-- }
+        }
 
         // ── Main rect ─────────────────────────────────────────────────────────
         Rectangle {
@@ -177,15 +192,16 @@ Window {
                     }
                 }
 
-                // CN definition — phase 1: hidden; phase 2: fade in
+                // CN definition — phase 1: hidden instantly; phase 2: fade in
                 Text {
+                    id: cnDefText
                     width: parent.width
                     text: rootWin.definitionText() || "暂无释义"
                     color: "#F1F5F9"
                     font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                     wrapMode: Text.WordWrap
                     opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                    Behavior on opacity { NumberAnimation { duration: rootWin._revealPhase >= 2 ? 200 : 0 } }
                 }
 
                 // Divider + examples (EN always visible; CN phase 2 only)
@@ -214,7 +230,7 @@ Window {
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                             opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                            Behavior on opacity { NumberAnimation { duration: rootWin._revealPhase >= 2 ? 200 : 0 } }
                         }
                     }
                 }
@@ -224,7 +240,7 @@ Window {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     // phase 1: instruction; phase 2: empty placeholder (keeps height)
-                    text: rootWin._revealPhase === 1 ? "单击查看答案，3 秒后自动揭示" : " "
+                    text: rootWin._revealPhase === 1 ? ("单击查看答案，" + rootWin._countdown + " 秒后自动揭示") : " "
                     color: "#475569"
                     font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                 }
@@ -235,7 +251,7 @@ Window {
                 anchors { top: parent.top; left: parent.left; right: parent.right; bottom: barArea.top }
                 z: -1
                 enabled: rootWin._revealPhase === 1
-                onClicked: { rootWin._revealPhase = 2; revealTimer.stop() }
+                onClicked: { rootWin._revealPhase = 2; revealTimer.stop(); countdownTimer.stop() }
             }
 
             // ── Bar area — passive word (collapsed) / rating buttons (phase 2) ─
@@ -272,6 +288,7 @@ Window {
                         if (!dragging && rootWin._revealPhase === 1) {
                             rootWin._revealPhase = 2
                             revealTimer.stop()
+                            countdownTimer.stop()
                         }
                     }
                 }
