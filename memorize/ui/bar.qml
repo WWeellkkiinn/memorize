@@ -39,13 +39,15 @@ Window {
     Connections {
         target: bridge
         function onWordChanged(w) {
-            rootWin.word = w
+            // Reset phase BEFORE updating word so CN text is already opacity:0
+            // when the new word's bindings evaluate — prevents one-frame flash
             if (container.open) {
                 rootWin._revealPhase = 1
                 rootWin._countdown = 3
                 revealTimer.restart()
                 countdownTimer.restart()
             }
+            rootWin.word = w
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
         function onExpandTriggered() {
@@ -192,16 +194,18 @@ Window {
                     }
                 }
 
-                // CN definition — phase 1: hidden instantly; phase 2: fade in
+                // CN definition — phase 1: hidden; phase 2: fade in
                 Text {
-                    id: cnDefText
                     width: parent.width
                     text: rootWin.definitionText() || "暂无释义"
                     color: "#F1F5F9"
                     font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                     wrapMode: Text.WordWrap
                     opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: rootWin._revealPhase >= 2 ? 200 : 0 } }
+                    Behavior on opacity {
+                        enabled: rootWin._revealPhase >= 2
+                        NumberAnimation { duration: 200 }
+                    }
                 }
 
                 // Divider + examples (EN always visible; CN phase 2 only)
@@ -230,7 +234,10 @@ Window {
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                             opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                            Behavior on opacity { NumberAnimation { duration: rootWin._revealPhase >= 2 ? 200 : 0 } }
+                            Behavior on opacity {
+                                enabled: rootWin._revealPhase >= 2
+                                NumberAnimation { duration: 200 }
+                            }
                         }
                     }
                 }
