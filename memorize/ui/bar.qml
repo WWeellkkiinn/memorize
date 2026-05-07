@@ -4,7 +4,7 @@ import QtQuick.Controls 2.15
 
 Window {
     id: rootWin
-    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "transparent"
     visible: true
 
