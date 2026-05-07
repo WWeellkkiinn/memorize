@@ -220,24 +220,26 @@ class WordStore:
     def rate(self, word_id: int, rating: Rating) -> None:
         """Apply FSRS rating and persist atomically (cards + review_logs)."""
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT fsrs_card FROM cards WHERE word_id=?", (word_id,)
-            ).fetchone()
-            if not row:
-                log.warning("rate() called for unknown word_id=%d", word_id)
-                return
-
-            card = Card.from_dict(json.loads(row["fsrs_card"]))
-            now = _now_utc()
-            card, _ = _fsrs.review_card(card, rating, now)
-
-            due_str = _iso(card.due)
+            # Use IMMEDIATE to lock before the read so no concurrent write can
+            # sneak in between SELECT and UPDATE (safe even in single-user desktop use).
+            conn.execute("BEGIN IMMEDIATE")
             try:
-                conn.execute("BEGIN")
+                row = conn.execute(
+                    "SELECT fsrs_card FROM cards WHERE word_id=?", (word_id,)
+                ).fetchone()
+                if not row:
+                    conn.execute("ROLLBACK")
+                    log.warning("rate() called for unknown word_id=%d", word_id)
+                    return
+
+                card = Card.from_dict(json.loads(row["fsrs_card"]))
+                now = _now_utc()
+                card, _ = _fsrs.review_card(card, rating, now)
+
                 conn.execute(
                     "UPDATE cards SET fsrs_card=?, due=?, stability=?, reps=reps+1"
                     " WHERE word_id=?",
-                    (json.dumps(card.to_dict()), due_str, card.stability, word_id),
+                    (json.dumps(card.to_dict()), _iso(card.due), card.stability, word_id),
                 )
                 conn.execute(
                     "INSERT INTO review_logs(word_id, rating, reviewed_at, stability, difficulty)"
@@ -246,5 +248,6 @@ class WordStore:
                 )
                 conn.execute("COMMIT")
             except Exception:
-                conn.execute("ROLLBACK")
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
                 raise

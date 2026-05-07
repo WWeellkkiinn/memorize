@@ -39,10 +39,18 @@ def _build_index(cet6_path: Path) -> dict[str, dict]:
 
 
 def _extract(entry: dict) -> dict:
-    """Extract fields from a kajweb/dict entry."""
-    # Nested format: entry["content"]["word"] contains the real data
-    content = entry.get("content", {})
-    word_data = content.get("word", entry)  # fallback to flat entry
+    """Extract fields from a kajweb/dict entry.
+
+    kajweb/dict nested structure:
+      entry["content"]["word"]["content"] → has usphone, trans, sentence
+      entry["content"]["word"]["content"]["sentence"]["sentences"] → list of examples
+
+    Falls back to flat entry if nested keys are absent.
+    """
+    # Try the documented nested path first
+    content_outer = entry.get("content") or {}
+    word_obj = content_outer.get("word") or {}
+    word_data = word_obj.get("content") or word_obj or entry
 
     phonetic = word_data.get("usphone") or word_data.get("ukphone") or ""
 
@@ -52,7 +60,13 @@ def _extract(entry: dict) -> dict:
         t.get("tranCn", "") for t in trans_list if t.get("tranCn")
     )
 
-    sentence_list = word_data.get("sentence") or []
+    # Sentence field may be an object {"sentences": [...]} or a list directly
+    sentence_raw = word_data.get("sentence") or []
+    if isinstance(sentence_raw, dict):
+        sentence_list = sentence_raw.get("sentences") or []
+    else:
+        sentence_list = sentence_raw  # already a list
+
     examples = [
         {"en": s.get("sContent", ""), "zh": s.get("sCn", "")}
         for s in sentence_list[:2]
