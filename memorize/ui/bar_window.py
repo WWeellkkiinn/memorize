@@ -17,7 +17,7 @@ _QT6_QML_DIR = os.path.join(os.path.dirname(PySide6.__file__), "Qt6", "qml")
 _QML_PATH = Path(__file__).with_name("bar.qml")
 
 _BASE_BAR_W = 360
-_BASE_BAR_H = 24
+_BASE_BAR_H = 40
 
 
 def _primary_ag():

@@ -47,6 +47,7 @@ class MemorizeApp:
                               on_ready=self._push_current_word)
 
         self._hover_active = False
+        self._passive_word_id: int | None = None
 
         # ── Timers ────────────────────────────────────────────────────────────
         self._word_timer = QTimer()
@@ -111,8 +112,8 @@ class MemorizeApp:
 
     def _on_word_timer(self) -> None:
         if self._hover_active:
-            return  # don't change word while user is reading
-        self._advance_and_push()
+            return
+        self._push_passive_word()
 
     def _on_remind_timer(self) -> None:
         if self._hover_active:
@@ -131,28 +132,47 @@ class MemorizeApp:
 
     def _push_current_word(self) -> None:
         word = self._scheduler.current_word()
-        self._bridge.push_word(self._word_to_payload(word))
+        self._bridge.push_word(self._word_to_payload(word, preview=True))
+        self._push_passive_word()
         if self._config.passive_mode:
             self._word_timer.start()
         if self._config.active_mode:
             self._remind_timer.start()
 
+    def _push_passive_word(self) -> None:
+        word = self._store.get_random_word(exclude_id=self._passive_word_id)
+        if word:
+            if self._passive_word_id is not None:
+                self._store.mark_seen(self._passive_word_id)
+            self._passive_word_id = word["id"]
+            self._bridge.push_passive_word(self._word_to_payload(word))
+
     def _advance_and_push(self) -> None:
         word = self._scheduler.advance()
-        self._bridge.push_word(self._word_to_payload(word))
+        self._bridge.push_word(self._word_to_payload(word, preview=True))
 
-    @staticmethod
-    def _word_to_payload(word: dict | None) -> dict:
+    def _word_to_payload(self, word: dict | None, preview: bool = False) -> dict:
         if not word:
             return {}
-        return {
+        payload = {
             "word_id": word.get("id", 0),
             "word": word.get("word", ""),
             "phonetic": word.get("phonetic", ""),
             "pos": word.get("pos", ""),
             "definition": word.get("definition", ""),
             "examples": word.get("examples", "[]"),
+            "next_again_days": 0,
+            "next_hard_days": 0,
+            "next_good_days": 0,
+            "next_easy_days": 0,
         }
+        if preview and word.get("id"):
+            intervals = self._store.get_preview_intervals(word["id"])
+            payload["next_again_days"] = intervals["again"]
+            payload["next_hard_days"] = intervals["hard"]
+            payload["next_good_days"] = intervals["good"]
+            payload["next_easy_days"] = intervals["easy"]
+        return payload
 
     def run(self) -> int:
         return self._qt.exec()

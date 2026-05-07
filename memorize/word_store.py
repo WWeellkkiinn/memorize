@@ -109,11 +109,15 @@ class WordStore:
             conn.execute(_CREATE_CARDS)
             conn.execute(_CREATE_REVIEW_LOGS)
             conn.execute(_CREATE_IDX_DUE)
-            # Migration: add card_id column and back-fill with word_id for old rows
+            # Migration: review_logs.card_id
             cols = {r[1] for r in conn.execute("PRAGMA table_info(review_logs)")}
             if "card_id" not in cols:
                 conn.execute("ALTER TABLE review_logs ADD COLUMN card_id INTEGER NOT NULL DEFAULT 0")
                 conn.execute("UPDATE review_logs SET card_id = word_id WHERE card_id = 0")
+            # Migration: cards.last_seen_at
+            card_cols = {r[1] for r in conn.execute("PRAGMA table_info(cards)")}
+            if "last_seen_at" not in card_cols:
+                conn.execute("ALTER TABLE cards ADD COLUMN last_seen_at TEXT DEFAULT NULL")
             conn.commit()
 
     # ── Insert ────────────────────────────────────────────────────────────────
@@ -199,6 +203,49 @@ class WordStore:
                 (_today(), word_id),
             )
             conn.commit()
+
+    def get_random_word(self, exclude_id: int | None = None) -> dict | None:
+        """Return a random word for passive display."""
+        with self._conn() as conn:
+            if exclude_id is not None:
+                row = conn.execute(
+                    _WORD_COLS + "WHERE w.id != ? ORDER BY RANDOM() LIMIT 1",
+                    (exclude_id,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    _WORD_COLS + "ORDER BY RANDOM() LIMIT 1"
+                ).fetchone()
+        return dict(row) if row else None
+
+    def mark_seen(self, word_id: int) -> None:
+        """Record that this word was passively seen (does not affect FSRS)."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE cards SET last_seen_at=? WHERE word_id=?",
+                (_iso(_now_utc()), word_id),
+            )
+            conn.commit()
+
+    def get_preview_intervals(self, word_id: int) -> dict[str, int]:
+        """Preview next review intervals (days) for each rating without modifying state."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT fsrs_card FROM cards WHERE word_id=?", (word_id,)
+            ).fetchone()
+        if not row:
+            return {"again": 1, "hard": 1, "good": 3, "easy": 7}
+        now = _now_utc()
+        fsrs_card_json = row["fsrs_card"]
+        result = {}
+        for rating, key in [
+            (Rating.Again, "again"), (Rating.Hard, "hard"),
+            (Rating.Good, "good"),  (Rating.Easy, "easy"),
+        ]:
+            card = Card.from_dict(json.loads(fsrs_card_json))
+            new_card, _ = _fsrs.review_card(card, rating, now)
+            result[key] = max(1, (new_card.due - now).days)
+        return result
 
     def total_words(self) -> int:
         with self._conn() as conn:

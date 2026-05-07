@@ -6,20 +6,23 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 class BarBridge(QObject):
     # Python → QML
-    wordChanged = Signal("QVariantMap")       # emits word dict when displayed word changes
-    expandTriggered = Signal()               # active reminder: auto-expand popup
-    collapseTriggered = Signal()             # active reminder: auto-collapse popup
-    maskHeightChanged = Signal(int)          # win32 mask update
-    moveWindowX = Signal(int)               # drag: move window
-    commitWindowX = Signal(int)             # drag: commit position
+    wordChanged = Signal("QVariantMap")        # active (FSRS) word
+    passiveWordChanged = Signal("QVariantMap") # passive bar word
+    expandTriggered = Signal()
+    collapseTriggered = Signal()
+    maskHeightChanged = Signal(int)
+    moveWindowX = Signal(int)
+    commitWindowX = Signal(int)
 
     def __init__(self, app, parent=None) -> None:
         super().__init__(parent)
         self._app = app
 
     def push_word(self, word: dict | None) -> None:
-        """Emit wordChanged with word data (or empty dict when library is empty)."""
         self.wordChanged.emit(word or {})
+
+    def push_passive_word(self, word: dict | None) -> None:
+        self.passiveWordChanged.emit(word or {})
 
     # ── QML → Python ─────────────────────────────────────────────────────────
 
