@@ -354,7 +354,7 @@ Window {
                         ]
                         delegate: Rectangle {
                             readonly property var btn: modelData
-                            width: Math.round(68 * rootWin.sf)
+                            width: Math.round(58 * rootWin.sf)
                             height: Math.round(22 * rootWin.sf)
                             radius: rootWin._br
                             color: _ratingMA.containsMouse ? btn.hover : btn.base
