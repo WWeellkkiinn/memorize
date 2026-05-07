@@ -70,7 +70,7 @@ Window {
         id: container
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
 
-        readonly property int barH: Math.round(28 * rootWin.sf)
+        readonly property int barH: Math.round(20 * rootWin.sf)
         property bool open: false
         property real _maskH: 0
 
@@ -128,7 +128,7 @@ Window {
             id: mainRect
             anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
 
-            readonly property int cardPad: Math.round(14 * rootWin.sf)
+            readonly property int cardPad: Math.round(20 * rootWin.sf)
             height: container.open
                     ? (container.barH + cardPad + cardCol.implicitHeight)
                     : container.barH
@@ -150,8 +150,8 @@ Window {
                 id: cardCol
                 anchors {
                     top: parent.top; topMargin: Math.round(10 * rootWin.sf)
-                    left: parent.left;  leftMargin:  Math.round(14 * rootWin.sf)
-                    right: parent.right; rightMargin: Math.round(14 * rootWin.sf)
+                    left: parent.left; leftMargin: Math.round(12 * rootWin.sf)
+                    right: parent.right; rightMargin: Math.round(12 * rootWin.sf)
                 }
                 spacing: Math.round(6 * rootWin.sf)
                 enabled: container.open
