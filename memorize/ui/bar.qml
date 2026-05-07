@@ -26,9 +26,14 @@ Window {
     function posText()        { return word.pos        || "" }
     function definitionText() { return word.definition || "" }
     function wordId()         { return word.word_id    || 0 }
-    function examples()       {
-        try { return JSON.parse(word.examples || "[]") } catch(e) { return [] }
+
+    // Cached parsed examples — recomputed only when word changes, not on every binding eval
+    property var _parsedExamples: []
+    onWordChanged: {
+        try { _parsedExamples = JSON.parse(word.examples || "[]") }
+        catch(e) { _parsedExamples = [] }
     }
+    function examples() { return _parsedExamples }
 
     Connections {
         target: bridge
@@ -184,6 +189,7 @@ Window {
                     Row {
                         anchors.centerIn: parent
                         spacing: Math.round(6 * rootWin.sf)
+                        enabled: rootWin.wordId() !== 0
 
                         Repeater {
                             model: [

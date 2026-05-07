@@ -130,7 +130,7 @@ class WordStore:
     # ── Query ─────────────────────────────────────────────────────────────────
 
     def get_due_words(self, limit: int = 20) -> list[dict]:
-        """Return words whose card is due now, ordered by due ASC."""
+        """Return words due for review (reps>0 only; new words go through get_new_words)."""
         now_str = _iso(_now_utc())
         with self._conn() as conn:
             rows = conn.execute(
@@ -139,7 +139,7 @@ class WordStore:
                        c.stability, c.reps, c.due
                 FROM words w
                 JOIN cards c ON c.word_id = w.id
-                WHERE c.due <= ?
+                WHERE c.due <= ? AND c.reps > 0
                 ORDER BY c.due ASC
                 LIMIT ?
                 """,

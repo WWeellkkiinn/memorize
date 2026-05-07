@@ -43,18 +43,18 @@ def load_config() -> Config:
             bar_x=_parse_optional_int(data.get("bar_x", defaults.bar_x)),
             passive_mode=bool(data.get("passive_mode", defaults.passive_mode)),
             active_mode=bool(data.get("active_mode", defaults.active_mode)),
-            word_change_interval_sec=int(
+            word_change_interval_sec=max(5, int(
                 data.get("word_change_interval_sec", defaults.word_change_interval_sec)
-            ),
-            reminder_interval_min=int(
+            )),
+            reminder_interval_min=max(1, int(
                 data.get("reminder_interval_min", defaults.reminder_interval_min)
-            ),
-            auto_dismiss_sec=int(
+            )),
+            auto_dismiss_sec=max(1, int(
                 data.get("auto_dismiss_sec", defaults.auto_dismiss_sec)
-            ),
-            daily_new_words=int(
+            )),
+            daily_new_words=max(1, int(
                 data.get("daily_new_words", defaults.daily_new_words)
-            ),
+            )),
         )
     except (TypeError, ValueError):
         logging.warning("config.json has invalid values, using defaults")

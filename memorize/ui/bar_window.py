@@ -69,7 +69,9 @@ class BarWindow:
         bridge.commitWindowX.connect(self._commit_window_x)
         bridge.maskHeightChanged.connect(self._apply_mask)
 
-        QTimer.singleShot(150, self._setup_win32)
+        # Defer win32 setup until Qt has processed the window creation event.
+        # Use 0ms first; if winId() is not yet available, retry once at 200ms.
+        QTimer.singleShot(0, self._setup_win32)
 
     # ── Window setup ──────────────────────────────────────────────────────────
 
@@ -83,7 +85,12 @@ class BarWindow:
         self._win.setHeight(ah)
 
     def _setup_win32(self) -> None:
-        self._own_hwnd = int(self._win.winId())
+        hwnd = int(self._win.winId())
+        if not hwnd:
+            # winId() not ready yet; retry once after a short delay
+            QTimer.singleShot(200, self._setup_win32)
+            return
+        self._own_hwnd = hwnd
         setup_toolwindow(self._own_hwnd)
         self._apply_mask(self._pending_visible_h or self._bar_h)
 
