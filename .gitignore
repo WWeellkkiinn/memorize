@@ -6,3 +6,4 @@ dist/
 build/
 *.spec
 .python-path
+data/cet6.json
