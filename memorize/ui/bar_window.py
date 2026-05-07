@@ -123,7 +123,3 @@ class BarWindow:
         clamped = max(ax, min(x, ax + aw - self._bar_w))
         self._bridge.commit_bar_x(clamped)
 
-    # ── Public ────────────────────────────────────────────────────────────────
-
-    def own_hwnd(self) -> int:
-        return self._own_hwnd

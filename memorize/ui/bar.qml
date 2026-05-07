@@ -8,11 +8,7 @@ Window {
     color: "transparent"
     visible: true
 
-    // Word data from Python
     property var word: ({})
-    // App state: "IDLE" | "HOVER_EXPANDED" | "ACTIVE_EXPANDED"
-    property string appState: "IDLE"
-
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
 
     // Style helpers
@@ -38,8 +34,8 @@ Window {
     Connections {
         target: bridge
         function onWordChanged(w)         { rootWin.word = w }
-        function onExpandTriggered()      { container.open = true; rootWin.appState = "ACTIVE_EXPANDED" }
-        function onCollapseTriggered()    { container.open = false; rootWin.appState = "IDLE" }
+        function onExpandTriggered()      { container.open = true }
+        function onCollapseTriggered()    { container.open = false }
     }
 
     // ── Container ─────────────────────────────────────────────────────────────
@@ -77,10 +73,7 @@ Window {
                     leaveTimer.stop()
                     maskShrinkTimer.stop()
                     bridge.onHoverEnter()
-                    if (!container.open) {
-                        container.open = true
-                        rootWin.appState = "HOVER_EXPANDED"
-                    }
+                    container.open = true
                 } else {
                     bridge.onHoverLeave()
                     leaveTimer.restart()
@@ -88,8 +81,7 @@ Window {
             }
         }
 
-        Timer { id: leaveTimer;      interval: 300; onTriggered: { container.open = false; rootWin.appState = "IDLE" } }
-        Timer { id: expandTimer;     interval: 0  }  // reserved for future delayed expand
+        Timer { id: leaveTimer;      interval: 300; onTriggered: container.open = false }
         Timer { id: maskShrinkTimer; interval: 300; onTriggered: { container._maskH = container.height; bridge.setVisibleHeight(container.height) } }
 
         // ── Main rect ─────────────────────────────────────────────────────────
@@ -176,9 +168,9 @@ Window {
                     }
                 }
 
-                // Divider before rating buttons
                 Rectangle {
                     width: parent.width; height: 1; color: "#2D3748"
+                    visible: rootWin.wordId() !== 0
                 }
 
                 // FSRS rating buttons
@@ -220,7 +212,6 @@ Window {
                                     onClicked: {
                                         bridge.rate(rootWin.wordId(), btn.rating)
                                         container.open = false
-                                        rootWin.appState = "IDLE"
                                     }
                                 }
                             }

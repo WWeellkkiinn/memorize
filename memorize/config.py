@@ -39,8 +39,10 @@ def load_config() -> Config:
 
     defaults = Config()
     try:
+        raw_x = data.get("bar_x", defaults.bar_x)
+        bar_x = None if raw_x is None else int(raw_x)
         return Config(
-            bar_x=_parse_optional_int(data.get("bar_x", defaults.bar_x)),
+            bar_x=bar_x,
             passive_mode=bool(data.get("passive_mode", defaults.passive_mode)),
             active_mode=bool(data.get("active_mode", defaults.active_mode)),
             word_change_interval_sec=max(5, int(
@@ -66,12 +68,3 @@ def save_config(config: Config) -> None:
     tmp = CONFIG_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(asdict(config), ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(CONFIG_PATH)
-
-
-def _parse_optional_int(value) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None

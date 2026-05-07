@@ -33,25 +33,6 @@ user32.GetDpiForWindow.argtypes = [wintypes.HWND]
 user32.GetDpiForWindow.restype = wintypes.UINT
 
 
-class POINT(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
-
-
-class MONITORINFO(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", wintypes.DWORD),
-        ("rcMonitor", wintypes.RECT),
-        ("rcWork", wintypes.RECT),
-        ("dwFlags", wintypes.DWORD),
-    ]
-
-
-user32.MonitorFromPoint.argtypes = [POINT, wintypes.DWORD]
-user32.MonitorFromPoint.restype = wintypes.HANDLE
-user32.GetMonitorInfoW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MONITORINFO)]
-user32.GetMonitorInfoW.restype = wintypes.BOOL
-
-MONITOR_DEFAULTTOPRIMARY = 0x00000001
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
@@ -64,8 +45,6 @@ SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 SWP_FRAMECHANGED = 0x0020
 
-_TASKBAR_H_FALLBACK = 48
-
 user32.SetWindowPos.argtypes = [
     wintypes.HWND,
     ctypes.c_ssize_t,
@@ -73,26 +52,6 @@ user32.SetWindowPos.argtypes = [
     wintypes.UINT,
 ]
 user32.SetWindowPos.restype = wintypes.BOOL
-
-
-def get_primary_work_area() -> tuple[int, int, int, int]:
-    """Return (left, top, right, bottom) of primary monitor work area (excludes taskbar)."""
-    try:
-        mon = user32.MonitorFromPoint(POINT(0, 0), MONITOR_DEFAULTTOPRIMARY)
-        if mon:
-            mi = MONITORINFO()
-            mi.cbSize = ctypes.sizeof(MONITORINFO)
-            if user32.GetMonitorInfoW(mon, ctypes.byref(mi)):
-                rw = mi.rcWork
-                return int(rw.left), int(rw.top), int(rw.right), int(rw.bottom)
-    except Exception:
-        pass
-    try:
-        w = int(user32.GetSystemMetrics(0))
-        h = int(user32.GetSystemMetrics(1))
-        return 0, 0, w, h - _TASKBAR_H_FALLBACK
-    except Exception:
-        return 0, 0, 1920, 1032
 
 
 def set_bottom_bar_mask(

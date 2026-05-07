@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import sys
-from pathlib import Path
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication, QIcon, QPixmap, QPainter, QColor
@@ -12,8 +11,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from fsrs import Rating
 
-from memorize.config import Config, DB_PATH, LOG_PATH, load_config, save_config
-from memorize.runtime_env import prepare_runtime_env
+from memorize.config import DB_PATH, LOG_PATH, load_config, save_config
 from memorize.scheduler import WordScheduler
 from memorize.ui.bar_bridge import BarBridge
 from memorize.ui.bar_window import BarWindow
@@ -98,7 +96,7 @@ class MemorizeApp:
 
     def on_hover_enter(self) -> None:
         self._hover_active = True
-        self._word_timer.stop()   # freeze word rotation while hovering
+        self._word_timer.stop()
 
     def on_hover_leave(self) -> None:
         self._hover_active = False
@@ -124,11 +122,11 @@ class MemorizeApp:
         if self._hover_active:
             return  # user is already looking at a word
         self._advance_and_push()
-        self._bridge.trigger_active_expand()
+        self._bridge.expandTriggered.emit()
         self._dismiss_timer.start()
 
     def _on_dismiss_timer(self) -> None:
-        self._bridge.trigger_active_collapse()
+        self._bridge.collapseTriggered.emit()
 
     def _on_screen_changed(self) -> None:
         self._bar.reposition()

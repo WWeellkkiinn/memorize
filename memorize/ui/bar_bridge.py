@@ -21,12 +21,6 @@ class BarBridge(QObject):
         """Emit wordChanged with word data (or empty dict when library is empty)."""
         self.wordChanged.emit(word or {})
 
-    def trigger_active_expand(self) -> None:
-        self.expandTriggered.emit()
-
-    def trigger_active_collapse(self) -> None:
-        self.collapseTriggered.emit()
-
     # ── QML → Python ─────────────────────────────────────────────────────────
 
     @Slot(int, int)

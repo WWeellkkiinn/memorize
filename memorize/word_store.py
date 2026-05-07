@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS review_logs (
 
 _CREATE_IDX_DUE = "CREATE INDEX IF NOT EXISTS idx_cards_due ON cards(due)"
 
+# Shared SELECT fragment used by all word-listing queries
+_WORD_COLS = """
+    SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples,
+           c.stability, c.reps, c.due
+    FROM words w
+    JOIN cards c ON c.word_id = w.id
+"""
+
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -59,8 +67,8 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
-def _parse_dt(s: str) -> datetime:
-    return datetime.fromisoformat(s)
+def _today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 class WordStore:
@@ -74,7 +82,6 @@ class WordStore:
         conn = sqlite3.connect(self._path, detect_types=sqlite3.PARSE_DECLTYPES)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
         try:
             yield conn
         finally:
@@ -82,6 +89,7 @@ class WordStore:
 
     def _init_db(self) -> None:
         with self._conn() as conn:
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.execute(_CREATE_WORDS)
             conn.execute(_CREATE_CARDS)
             conn.execute(_CREATE_REVIEW_LOGS)
@@ -114,16 +122,13 @@ class WordStore:
 
     def init_card(self, word_id: int) -> None:
         """Create a new FSRS card for word_id if one doesn't exist yet."""
-        card = Card()
         now = _now_utc()
-        card_dict = card.to_dict()
-        # new card is due immediately
-        card_dict["due"] = _iso(now)
+        card = Card()
         with self._conn() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO cards(word_id, fsrs_card, due, stability, reps)"
                 " VALUES(?,?,?,?,?)",
-                (word_id, json.dumps(card_dict), _iso(now), 0.0, 0),
+                (word_id, json.dumps(card.to_dict()), _iso(now), 0.0, 0),
             )
             conn.commit()
 
@@ -134,15 +139,7 @@ class WordStore:
         now_str = _iso(_now_utc())
         with self._conn() as conn:
             rows = conn.execute(
-                """
-                SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples,
-                       c.stability, c.reps, c.due
-                FROM words w
-                JOIN cards c ON c.word_id = w.id
-                WHERE c.due <= ? AND c.reps > 0
-                ORDER BY c.due ASC
-                LIMIT ?
-                """,
+                _WORD_COLS + "WHERE c.due <= ? AND c.reps > 0 ORDER BY c.due ASC LIMIT ?",
                 (now_str, limit),
             ).fetchall()
         return [dict(r) for r in rows]
@@ -160,15 +157,7 @@ class WordStore:
         """Return words with reps=0 (never reviewed), for new-word introduction."""
         with self._conn() as conn:
             rows = conn.execute(
-                """
-                SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples,
-                       c.stability, c.reps, c.due
-                FROM words w
-                JOIN cards c ON c.word_id = w.id
-                WHERE c.reps = 0
-                ORDER BY w.id ASC
-                LIMIT ?
-                """,
+                _WORD_COLS + "WHERE c.reps = 0 ORDER BY w.id ASC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
@@ -177,36 +166,26 @@ class WordStore:
         """Fallback: words with lowest stability (already reviewed at least once)."""
         with self._conn() as conn:
             rows = conn.execute(
-                """
-                SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples,
-                       c.stability, c.reps, c.due
-                FROM words w
-                JOIN cards c ON c.word_id = w.id
-                WHERE c.reps > 0
-                ORDER BY c.stability ASC
-                LIMIT ?
-                """,
+                _WORD_COLS + "WHERE c.reps > 0 ORDER BY c.stability ASC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
 
     def mark_introduced(self, word_id: int) -> None:
         """Record today as the introduction date for a new word (idempotent)."""
-        today = datetime.now().strftime("%Y-%m-%d")
         with self._conn() as conn:
             conn.execute(
                 "UPDATE cards SET introduced_date=? WHERE word_id=? AND introduced_date IS NULL",
-                (today, word_id),
+                (_today(), word_id),
             )
             conn.commit()
 
     def count_introduced_today(self) -> int:
         """Count words introduced today (regardless of whether they've been rated)."""
-        today = datetime.now().strftime("%Y-%m-%d")
         with self._conn() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) AS n FROM cards WHERE introduced_date=?",
-                (today,),
+                (_today(),),
             ).fetchone()
         return row["n"] if row else 0
 
@@ -220,8 +199,7 @@ class WordStore:
     def rate(self, word_id: int, rating: Rating) -> None:
         """Apply FSRS rating and persist atomically (cards + review_logs)."""
         with self._conn() as conn:
-            # Use IMMEDIATE to lock before the read so no concurrent write can
-            # sneak in between SELECT and UPDATE (safe even in single-user desktop use).
+            # IMMEDIATE lock: read + write in one atomic step
             conn.execute("BEGIN IMMEDIATE")
             try:
                 row = conn.execute(
