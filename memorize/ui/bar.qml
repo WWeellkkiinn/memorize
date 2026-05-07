@@ -200,6 +200,7 @@ Window {
                     color: rootWin._revealPhase >= 2 ? "#F1F5F9" : "#475569"
                     font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                     wrapMode: Text.WordWrap
+                    Behavior on color { ColorAnimation { duration: 200 } }
                 }
 
                 // Divider + examples (EN always visible; CN phase 2 only)
@@ -222,12 +223,12 @@ Window {
                             wrapMode: Text.WordWrap
                         }
                         Text {
+                            id: cnExText
                             width: parent.width
                             text: rootWin.examples()[index] ? rootWin.examples()[index].zh : ""
                             color: "#F1F5F9"
                             font { pixelSize: rootWin._fsLg; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
-                            id: cnExText
                             state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
                             states: [
                                 State { name: "hidden"; PropertyChanges { target: cnExText; opacity: 0.0 } },
