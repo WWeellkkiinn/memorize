@@ -194,17 +194,21 @@ Window {
                     }
                 }
 
-                // CN definition — phase 1: hidden; phase 2: fade in
+                // CN definition — instant hide, animated reveal
                 Text {
                     width: parent.width
                     text: rootWin.definitionText() || "暂无释义"
                     color: "#F1F5F9"
                     font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                     wrapMode: Text.WordWrap
-                    opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                    Behavior on opacity {
-                        enabled: rootWin._revealPhase >= 2
-                        NumberAnimation { duration: 200 }
+                    state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
+                    states: [
+                        State { name: "hidden"; PropertyChanges { opacity: 0.0 } },
+                        State { name: "shown";  PropertyChanges { opacity: 1.0 } }
+                    ]
+                    transitions: Transition {
+                        from: "hidden"; to: "shown"
+                        NumberAnimation { property: "opacity"; duration: 200 }
                     }
                 }
 
@@ -233,10 +237,14 @@ Window {
                             color: "#F1F5F9"
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
-                            opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                            Behavior on opacity {
-                                enabled: rootWin._revealPhase >= 2
-                                NumberAnimation { duration: 200 }
+                            state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
+                            states: [
+                                State { name: "hidden"; PropertyChanges { opacity: 0.0 } },
+                                State { name: "shown";  PropertyChanges { opacity: 1.0 } }
+                            ]
+                            transitions: Transition {
+                                from: "hidden"; to: "shown"
+                                NumberAnimation { property: "opacity"; duration: 200 }
                             }
                         }
                     }
