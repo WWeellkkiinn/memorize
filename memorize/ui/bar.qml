@@ -37,7 +37,13 @@ Window {
 
     Connections {
         target: bridge
-        function onWordChanged(w)        { rootWin.word = w }
+        function onWordChanged(w) {
+            rootWin.word = w
+            if (container.open) {
+                rootWin._revealPhase = 1
+                revealTimer.restart()
+            }
+        }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
         function onExpandTriggered() {
             container.open = true
@@ -338,7 +344,6 @@ Window {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     bridge.rate(rootWin.wordId(), btn.rating)
-                                    container.open = false
                                 }
                             }
                         }

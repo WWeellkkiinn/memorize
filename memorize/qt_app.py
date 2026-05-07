@@ -86,10 +86,8 @@ class MemorizeApp:
         log.info("rated word_id=%d rating=%s", word_id, rating)
         self._scheduler.rate(word_id, rating)
         self._dismiss_timer.stop()
-        self._hover_active = False
         self._advance_and_push()
-        if self._config.passive_mode:
-            self._word_timer.start()
+        # Card stays open; hover state and timers managed by hover enter/leave
 
     def on_hover_enter(self) -> None:
         self._hover_active = True
