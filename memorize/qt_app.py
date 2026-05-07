@@ -37,7 +37,7 @@ class MemorizeApp:
 
         self._config = load_config()
         self._store = WordStore(DB_PATH)
-        self._scheduler = WordScheduler(self._store, self._config.daily_new_words)
+        self._scheduler = WordScheduler(self._store)
 
         self._qt = QApplication.instance() or QApplication(sys.argv)
         self._qt.setQuitOnLastWindowClosed(False)

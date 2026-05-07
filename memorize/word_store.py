@@ -9,11 +9,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 
-from fsrs import Card, Rating, Scheduler
+from fsrs import Card, Rating, ReviewLog as FsrsReviewLog, Scheduler
+
+from memorize.config import FSRS_PARAMS_PATH
 
 log = logging.getLogger(__name__)
 
-_fsrs = Scheduler()
+
+def _load_scheduler() -> Scheduler:
+    try:
+        if FSRS_PARAMS_PATH.exists():
+            params = json.loads(FSRS_PARAMS_PATH.read_text(encoding="utf-8"))
+            log.info("Loaded custom FSRS parameters from %s", FSRS_PARAMS_PATH)
+            return Scheduler(parameters=params)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        log.warning("Invalid fsrs_params.json, using defaults: %s", e)
+    return Scheduler()
+
+
+_fsrs = _load_scheduler()
 
 _CREATE_WORDS = """
 CREATE TABLE IF NOT EXISTS words (
@@ -41,6 +55,7 @@ _CREATE_REVIEW_LOGS = """
 CREATE TABLE IF NOT EXISTS review_logs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     word_id     INTEGER NOT NULL REFERENCES words(id),
+    card_id     INTEGER NOT NULL DEFAULT 0,
     rating      INTEGER NOT NULL,
     reviewed_at TEXT NOT NULL,
     stability   REAL,
@@ -94,6 +109,11 @@ class WordStore:
             conn.execute(_CREATE_CARDS)
             conn.execute(_CREATE_REVIEW_LOGS)
             conn.execute(_CREATE_IDX_DUE)
+            # Migration: add card_id column and back-fill with word_id for old rows
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(review_logs)")}
+            if "card_id" not in cols:
+                conn.execute("ALTER TABLE review_logs ADD COLUMN card_id INTEGER NOT NULL DEFAULT 0")
+                conn.execute("UPDATE review_logs SET card_id = word_id WHERE card_id = 0")
             conn.commit()
 
     # ── Insert ────────────────────────────────────────────────────────────────
@@ -180,15 +200,6 @@ class WordStore:
             )
             conn.commit()
 
-    def count_introduced_today(self) -> int:
-        """Count words introduced today (regardless of whether they've been rated)."""
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) AS n FROM cards WHERE introduced_date=?",
-                (_today(),),
-            ).fetchone()
-        return row["n"] if row else 0
-
     def total_words(self) -> int:
         with self._conn() as conn:
             row = conn.execute("SELECT COUNT(*) AS n FROM words").fetchone()
@@ -212,7 +223,7 @@ class WordStore:
 
                 card = Card.from_dict(json.loads(row["fsrs_card"]))
                 now = _now_utc()
-                card, _ = _fsrs.review_card(card, rating, now)
+                card, review_log = _fsrs.review_card(card, rating, now)
 
                 conn.execute(
                     "UPDATE cards SET fsrs_card=?, due=?, stability=?, reps=reps+1"
@@ -220,12 +231,27 @@ class WordStore:
                     (json.dumps(card.to_dict()), _iso(card.due), card.stability, word_id),
                 )
                 conn.execute(
-                    "INSERT INTO review_logs(word_id, rating, reviewed_at, stability, difficulty)"
-                    " VALUES(?,?,?,?,?)",
-                    (word_id, rating.value, _iso(now), card.stability, card.difficulty),
+                    "INSERT INTO review_logs(word_id, card_id, rating, reviewed_at, stability, difficulty)"
+                    " VALUES(?,?,?,?,?,?)",
+                    (word_id, review_log.card_id, rating.value, _iso(now), card.stability, card.difficulty),
                 )
                 conn.execute("COMMIT")
             except Exception:
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
                 raise
+
+    def get_review_logs_for_optimizer(self) -> list[FsrsReviewLog]:
+        """Return all ReviewLog objects suitable for fsrs.Optimizer."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT card_id, rating, reviewed_at FROM review_logs ORDER BY reviewed_at ASC"
+            ).fetchall()
+        return [
+            FsrsReviewLog(
+                card_id=r["card_id"],
+                rating=Rating(r["rating"]),
+                review_datetime=datetime.fromisoformat(r["reviewed_at"]),
+            )
+            for r in rows
+        ]

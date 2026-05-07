@@ -15,13 +15,10 @@ _QUEUE_FILL = 20
 
 
 class WordScheduler:
-    def __init__(self, store: WordStore, daily_new_words: int = 20) -> None:
+    def __init__(self, store: WordStore) -> None:
         self._store = store
-        self._daily_new_words = daily_new_words
         self._queue: deque[int] = deque()
         self._current_id: int | None = None
-        # Cache today's new-word count to avoid a DB query on every advance
-        self._introduced_today: int = store.count_introduced_today()
         self._fill_queue()
 
     @property
@@ -62,14 +59,12 @@ class WordScheduler:
         if self._queue:
             return self._queue.popleft()
 
-        # 2. New words (if daily quota not exhausted)
-        if self._introduced_today < self._daily_new_words:
-            new_words = self._store.get_new_words(limit=1)
-            if new_words:
-                word_id = new_words[0]["id"]
-                self._store.mark_introduced(word_id)
-                self._introduced_today += 1
-                return word_id
+        # 2. New words (no daily quota — user-paced)
+        new_words = self._store.get_new_words(limit=1)
+        if new_words:
+            word_id = new_words[0]["id"]
+            self._store.mark_introduced(word_id)
+            return word_id
 
         # 3. Fallback: lowest-stability already-reviewed word (exclude current)
         candidates = self._store.get_lowest_stability_words(limit=10)

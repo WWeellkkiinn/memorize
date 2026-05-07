@@ -15,6 +15,7 @@ def _appdata_dir() -> Path:
 CONFIG_PATH = _appdata_dir() / "config.json"
 DB_PATH = _appdata_dir() / "words.db"
 LOG_PATH = _appdata_dir() / "memorize.log"
+FSRS_PARAMS_PATH = _appdata_dir() / "fsrs_params.json"
 
 
 @dataclass
@@ -25,7 +26,6 @@ class Config:
     word_change_interval_sec: int = 60
     reminder_interval_min: int = 30
     auto_dismiss_sec: int = 8
-    daily_new_words: int = 20
 
 
 def load_config() -> Config:
@@ -53,9 +53,6 @@ def load_config() -> Config:
             )),
             auto_dismiss_sec=max(1, int(
                 data.get("auto_dismiss_sec", defaults.auto_dismiss_sec)
-            )),
-            daily_new_words=max(1, int(
-                data.get("daily_new_words", defaults.daily_new_words)
             )),
         )
     except (TypeError, ValueError):
