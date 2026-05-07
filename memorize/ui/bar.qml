@@ -218,14 +218,14 @@ Window {
                             width: parent.width
                             text: rootWin.examples()[index] ? rootWin.examples()[index].en : ""
                             color: "#F1F5F9"
-                            font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                            font { pixelSize: rootWin._fsLg; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                         }
                         Text {
                             width: parent.width
                             text: rootWin.examples()[index] ? rootWin.examples()[index].zh : ""
                             color: "#F1F5F9"
-                            font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                            font { pixelSize: rootWin._fsLg; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                             id: cnExText
                             state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
