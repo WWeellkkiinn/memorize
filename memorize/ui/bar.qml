@@ -191,23 +191,15 @@ Window {
                     }
                 }
 
-                // CN definition — instant hide, animated reveal
+                // Phase 1: countdown hint; Phase 2: CN definition (same element, no blank line)
                 Text {
-                    id: cnDefText
                     width: parent.width
-                    text: rootWin.definitionText() || "暂无释义"
-                    color: "#F1F5F9"
+                    text: rootWin._revealPhase >= 2
+                          ? (rootWin.definitionText() || "暂无释义")
+                          : ("单击查看答案，" + rootWin._countdown + " 秒后自动揭示")
+                    color: rootWin._revealPhase >= 2 ? "#F1F5F9" : "#475569"
                     font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                     wrapMode: Text.WordWrap
-                    state: rootWin._revealPhase >= 2 ? "shown" : "hidden"
-                    states: [
-                        State { name: "hidden"; PropertyChanges { target: cnDefText; opacity: 0.0 } },
-                        State { name: "shown";  PropertyChanges { target: cnDefText; opacity: 1.0 } }
-                    ]
-                    transitions: Transition {
-                        from: "hidden"; to: "shown"
-                        NumberAnimation { property: "opacity"; duration: 200 }
-                    }
                 }
 
                 // Divider + examples (EN always visible; CN phase 2 only)
@@ -249,15 +241,6 @@ Window {
                     }
                 }
 
-                // Countdown hint — always in layout (stable height), invisible in phase 2
-                Text {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: "单击查看答案，" + rootWin._countdown + " 秒后自动揭示"
-                    color: "#475569"
-                    font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
-                    opacity: rootWin._revealPhase === 1 ? 1.0 : 0.0
-                }
             }
 
             // Click-to-reveal overlay — covers entire popup above barArea (phase 1 only)
