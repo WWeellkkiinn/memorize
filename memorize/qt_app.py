@@ -133,7 +133,7 @@ class MemorizeApp:
 
     def _push_current_word(self) -> None:
         word = self._scheduler.current_word()
-        self._bridge.push_word(self._word_to_payload(word, preview=True))
+        self._bridge.push_word(self._word_to_payload(word))
         self._push_passive_word()
         if self._config.passive_mode:
             self._word_timer.start()
@@ -150,30 +150,20 @@ class MemorizeApp:
 
     def _advance_and_push(self) -> None:
         word = self._scheduler.advance()
-        self._bridge.push_word(self._word_to_payload(word, preview=True))
+        self._bridge.push_word(self._word_to_payload(word))
 
-    def _word_to_payload(self, word: dict | None, preview: bool = False) -> dict:
+    @staticmethod
+    def _word_to_payload(word: dict | None) -> dict:
         if not word:
             return {}
-        payload = {
+        return {
             "word_id": word.get("id", 0),
             "word": word.get("word", ""),
             "phonetic": word.get("phonetic", ""),
             "pos": word.get("pos", ""),
             "definition": word.get("definition", ""),
             "examples": word.get("examples", "[]"),
-            "next_again_days": 0,
-            "next_hard_days": 0,
-            "next_good_days": 0,
-            "next_easy_days": 0,
         }
-        if preview and word.get("id"):
-            intervals = self._store.get_preview_intervals(word["id"])
-            payload["next_again_days"] = intervals["again"]
-            payload["next_hard_days"] = intervals["hard"]
-            payload["next_good_days"] = intervals["good"]
-            payload["next_easy_days"] = intervals["easy"]
-        return payload
 
     def run(self) -> int:
         return self._qt.exec()
