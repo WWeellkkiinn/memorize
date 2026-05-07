@@ -8,22 +8,27 @@ Window {
     color: "transparent"
     visible: true
 
-    property var word: ({})
+    property var word: ({})        // active (FSRS) word — used in expanded popup
+    property var passiveWord: ({}) // passive bar word — used in collapsed bar
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
+
+    // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed (CN visible)
+    property int _revealPhase: 0
+    property int _hoveredRating: 0   // tracks which rating button is hovered (0=none)
 
     // Style helpers
     readonly property int _fs:   Math.round(11 * sf)
     readonly property int _fsLg: Math.round(13 * sf)
     readonly property int _br:   Math.round(6 * sf)
 
-    // Helpers to safely read nested word data
+    // Safe accessors for active word
     function wordText()       { return word.word       || "" }
     function phoneticText()   { return word.phonetic   || "" }
     function posText()        { return word.pos        || "" }
     function definitionText() { return word.definition || "" }
     function wordId()         { return word.word_id    || 0 }
 
-    // Cached parsed examples — recomputed only when word changes, not on every binding eval
+    // Cached parsed examples (active word only)
     property var _parsedExamples: []
     onWordChanged: {
         try { _parsedExamples = JSON.parse(word.examples || "[]") }
@@ -31,11 +36,21 @@ Window {
     }
     function examples() { return _parsedExamples }
 
+    // Next review days per rating (active word)
+    function nextDaysFor(rating) {
+        if (rating === 1) return word.next_again_days || 0
+        if (rating === 2) return word.next_hard_days  || 0
+        if (rating === 3) return word.next_good_days  || 0
+        if (rating === 4) return word.next_easy_days  || 0
+        return 0
+    }
+
     Connections {
         target: bridge
-        function onWordChanged(w)         { rootWin.word = w }
-        function onExpandTriggered()      { container.open = true }
-        function onCollapseTriggered()    { container.open = false }
+        function onWordChanged(w)          { rootWin.word = w }
+        function onPassiveWordChanged(w)   { rootWin.passiveWord = w }
+        function onExpandTriggered()       { container.open = true }
+        function onCollapseTriggered()     { container.open = false }
     }
 
     // ── Container ─────────────────────────────────────────────────────────────
@@ -43,7 +58,7 @@ Window {
         id: container
         anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
 
-        readonly property int barH: Math.round(24 * rootWin.sf)
+        readonly property int barH: Math.round(40 * rootWin.sf)
         property bool open: false
         property real _maskH: 0
 
@@ -56,12 +71,16 @@ Window {
             }
         }
         onOpenChanged: {
-            if (!open) {
-                maskShrinkTimer.restart()
-            } else {
+            if (open) {
+                rootWin._revealPhase = 1
+                revealTimer.start()
                 maskShrinkTimer.stop()
                 _maskH = height
                 bridge.setVisibleHeight(height)
+            } else {
+                rootWin._revealPhase = 0
+                revealTimer.stop()
+                maskShrinkTimer.restart()
             }
         }
 
@@ -82,14 +101,15 @@ Window {
         }
 
         Timer { id: leaveTimer;      interval: 300; onTriggered: container.open = false }
-        Timer { id: maskShrinkTimer; interval: 300; onTriggered: { container._maskH = container.height; bridge.setVisibleHeight(container.height) } }
+        Timer { id: maskShrinkTimer; interval: 300; onTriggered: { container._maskH = container.barH; bridge.setVisibleHeight(container.barH) } }
+        Timer { id: revealTimer;     interval: 3000; onTriggered: rootWin._revealPhase = 2 }
 
         // ── Main rect ─────────────────────────────────────────────────────────
         Rectangle {
             id: mainRect
             anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
 
-            readonly property int cardPad: Math.round(16 * rootWin.sf)
+            readonly property int cardPad: Math.round(14 * rootWin.sf)
             height: container.open
                     ? (container.barH + cardPad + cardCol.implicitHeight)
                     : container.barH
@@ -107,7 +127,7 @@ Window {
                 bottomLeftRadius: r; bottomRightRadius: r
             }
 
-            // ── Detail card (expanded only) ───────────────────────────────────
+            // ── Detail card (expanded — active word, two phases) ──────────────
             Column {
                 id: cardCol
                 anchors {
@@ -120,22 +140,18 @@ Window {
                 opacity: container.open ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
-                // Pos + Definition inline
+                // Active word header: pos badge + word + phonetic
                 Row {
-                    id: posDefRow
-                    width: parent.width
                     spacing: Math.round(6 * rootWin.sf)
-                    readonly property bool hasPos: rootWin.posText() !== ""
 
                     Rectangle {
                         id: posBadge
-                        visible: posDefRow.hasPos
+                        visible: rootWin.posText() !== ""
                         width: posLabel.implicitWidth + Math.round(8 * rootWin.sf)
                         height: posLabel.implicitHeight + Math.round(2 * rootWin.sf)
                         radius: Math.round(3 * rootWin.sf)
                         color: "transparent"
-                        border.color: "#475569"
-                        border.width: 1
+                        border.color: "#475569"; border.width: 1
                         anchors.verticalCenter: parent.verticalCenter
 
                         Text {
@@ -148,27 +164,39 @@ Window {
                     }
 
                     Text {
-                        width: posDefRow.width - (posDefRow.hasPos ? posBadge.width + posDefRow.spacing : 0)
-                        text: rootWin.definitionText() || "暂无释义"
+                        text: rootWin.wordText()
                         color: "#F1F5F9"
                         font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
-                        wrapMode: Text.WordWrap
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        text: rootWin.phoneticText() ? "/" + rootWin.phoneticText() + "/" : ""
+                        color: "#94A3B8"
+                        font { pixelSize: rootWin._fs; family: "Consolas" }
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
 
-                // Divider
+                // Chinese definition — hidden in phase 1, revealed in phase 2
+                Text {
+                    width: parent.width
+                    text: rootWin.definitionText() || "暂无释义"
+                    color: "#F1F5F9"
+                    font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                    wrapMode: Text.WordWrap
+                    opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                }
+
+                // Divider + examples (EN visible phase 1+, CN hidden in phase 1)
                 Rectangle {
-                    width: parent.width; height: 1
-                    color: "#2D3748"
+                    width: parent.width; height: 1; color: "#2D3748"
                     visible: rootWin.examples().length > 0
                 }
 
-                // Examples (up to 2)
                 Repeater {
-                    model: {
-                        var ex = rootWin.examples()
-                        return Math.min(ex.length, 2)
-                    }
+                    model: Math.min(rootWin.examples().length, 2)
                     delegate: Column {
                         width: parent.width
                         spacing: Math.round(2 * rootWin.sf)
@@ -186,31 +214,38 @@ Window {
                             color: "#F1F5F9"
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
+                            opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
                         }
                     }
                 }
 
+                // Divider before rating buttons
                 Rectangle {
                     width: parent.width; height: 1; color: "#2D3748"
                     visible: rootWin.wordId() !== 0
+                    opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
                 }
 
-                // FSRS rating buttons
-                Item {
+                // FSRS rating buttons — appear on reveal
+                Column {
                     width: parent.width
-                    height: Math.round(26 * rootWin.sf)
+                    spacing: Math.round(3 * rootWin.sf)
+                    opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 150 } }
 
                     Row {
-                        anchors.centerIn: parent
+                        anchors.horizontalCenter: parent.horizontalCenter
                         spacing: Math.round(6 * rootWin.sf)
                         enabled: rootWin.wordId() !== 0
 
                         Repeater {
                             model: [
-                                { label: "忘了",  rating: 1, base: "#7F1D1D", hover: "#991B1B" },
-                                { label: "模糊",  rating: 2, base: "#92400E", hover: "#B45309" },
-                                { label: "记得",  rating: 3, base: "#1E3A5F", hover: "#1D4ED8" },
-                                { label: "轻松",  rating: 4, base: "#065F46", hover: "#047857" }
+                                { label: "忘了", rating: 1, base: "#7F1D1D", hover: "#991B1B" },
+                                { label: "模糊", rating: 2, base: "#92400E", hover: "#B45309" },
+                                { label: "记得", rating: 3, base: "#1E3A5F", hover: "#1D4ED8" },
+                                { label: "轻松", rating: 4, base: "#065F46", hover: "#047857" }
                             ]
                             delegate: Rectangle {
                                 readonly property var btn: modelData
@@ -226,11 +261,14 @@ Window {
                                     color: "#F1F5F9"
                                     font { pixelSize: rootWin._fs; bold: true; family: "Microsoft YaHei UI" }
                                 }
+
                                 MouseArea {
                                     id: _ratingMA
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
+                                    onEntered: rootWin._hoveredRating = btn.rating
+                                    onExited:  rootWin._hoveredRating = 0
                                     onClicked: {
                                         bridge.rate(rootWin.wordId(), btn.rating)
                                         container.open = false
@@ -239,10 +277,39 @@ Window {
                             }
                         }
                     }
+
+                    // Next review hint — shows below buttons when any is hovered
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        visible: rootWin._hoveredRating > 0 && rootWin.nextDaysFor(rootWin._hoveredRating) > 0
+                        text: visible ? ("下次 " + rootWin.nextDaysFor(rootWin._hoveredRating) + " 天后") : ""
+                        color: "#64748B"
+                        font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                    }
+                }
+
+                // Phase 1 hint — click or wait (height collapses when hidden)
+                Text {
+                    width: parent.width
+                    visible: rootWin._revealPhase === 1
+                    height: visible ? implicitHeight : 0
+                    text: "单击查看答案，3 秒后自动揭示"
+                    color: "#475569"
+                    font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
 
-            // ── Bar area (always visible) ─────────────────────────────────────
+            // Click-to-reveal overlay (phase 1 only, behind buttons)
+            MouseArea {
+                anchors { top: parent.top; left: parent.left; right: parent.right; bottom: barArea.top }
+                z: -1
+                enabled: rootWin._revealPhase === 1
+                onClicked: { rootWin._revealPhase = 2; revealTimer.stop() }
+            }
+
+            // ── Bar area (always visible — passive word) ──────────────────────
             Item {
                 id: barArea
                 anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
@@ -274,24 +341,37 @@ Window {
                     onCanceled: dragging = false
                 }
 
-                // Word text (center)
-                Text {
-                    anchors { left: parent.left; leftMargin: Math.round(10 * rootWin.sf); verticalCenter: parent.verticalCenter }
-                    text: rootWin.wordText() || "—"
-                    color: "#F1F5F9"
-                    font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
-                }
+                // Passive word: two-line layout
+                Column {
+                    anchors {
+                        left: parent.left; leftMargin: Math.round(10 * rootWin.sf)
+                        verticalCenter: parent.verticalCenter
+                    }
+                    spacing: Math.round(1 * rootWin.sf)
 
-                // Phonetic (right of word)
-                Text {
-                    anchors { left: parent.left; leftMargin: Math.round(80 * rootWin.sf); verticalCenter: parent.verticalCenter }
-                    text: rootWin.phoneticText() ? ("/" + rootWin.phoneticText() + "/") : ""
-                    color: "#F1F5F9"
-                    font { pixelSize: rootWin._fs; family: "Consolas" }
-                    elide: Text.ElideRight
-                    width: Math.round(180 * rootWin.sf)
-                }
+                    Row {
+                        spacing: Math.round(6 * rootWin.sf)
+                        Text {
+                            text: passiveWord.word || "—"
+                            color: "#F1F5F9"
+                            font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                        }
+                        Text {
+                            text: passiveWord.phonetic ? "/" + passiveWord.phonetic + "/" : ""
+                            color: "#94A3B8"
+                            font { pixelSize: rootWin._fs; family: "Consolas" }
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
 
+                    Text {
+                        text: passiveWord.definition || ""
+                        color: "#94A3B8"
+                        font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                        elide: Text.ElideRight
+                        width: barArea.width - Math.round(20 * rootWin.sf)
+                    }
+                }
             }
         }
     }
