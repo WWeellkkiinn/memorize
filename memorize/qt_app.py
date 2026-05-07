@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication, QIcon, QPixmap, QPainter, QColor
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from fsrs import Rating
@@ -35,7 +35,6 @@ def _setup_logging() -> None:
 
 class MemorizeApp:
     def __init__(self) -> None:
-        prepare_runtime_env()
         _setup_logging()
 
         self._config = load_config()
@@ -48,7 +47,7 @@ class MemorizeApp:
         self._bridge = BarBridge(self)
         self._bar = BarWindow(self._bridge, saved_x=self._config.bar_x)
 
-        self._hover_active = False   # True while user is hovering the bar
+        self._hover_active = False
 
         # ── Timers ────────────────────────────────────────────────────────────
         self._word_timer = QTimer()
@@ -69,11 +68,12 @@ class MemorizeApp:
         QGuiApplication.instance().primaryScreenChanged.connect(self._on_screen_changed)
 
         # ── System tray ───────────────────────────────────────────────────────
-        self._tray = QSystemTrayIcon(self._qt)
-        self._tray.setToolTip("Memorize")
-        tray_menu = QMenu()
-        tray_menu.addAction("退出").triggered.connect(self.quit)
-        self._tray.setContextMenu(tray_menu)
+        self._tray = QSystemTrayIcon()
+        self._tray.setToolTip("Memorize — 背单词")
+        self._tray.setIcon(self._make_tray_icon())
+        self._tray_menu = QMenu()           # kept as attribute to prevent GC
+        self._tray_menu.addAction("退出").triggered.connect(self.quit)
+        self._tray.setContextMenu(self._tray_menu)
         self._tray.show()
 
         # ── Initial word ──────────────────────────────────────────────────────
@@ -92,9 +92,9 @@ class MemorizeApp:
         self._scheduler.rate(word_id, rating)
         self._dismiss_timer.stop()
         self._hover_active = False
-        # Advance to next word and restart rotation timer
         self._advance_and_push()
-        self._word_timer.start()
+        if self._config.passive_mode:
+            self._word_timer.start()
 
     def on_hover_enter(self) -> None:
         self._hover_active = True
@@ -158,3 +158,22 @@ class MemorizeApp:
 
     def run(self) -> int:
         return self._qt.exec()
+
+    @staticmethod
+    def _make_tray_icon() -> QIcon:
+        """Create a simple 16x16 green 'M' icon for the system tray."""
+        px = QPixmap(16, 16)
+        px.fill(QColor(0, 0, 0, 0))
+        painter = QPainter(px)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setBrush(QColor("#10B981"))
+        painter.setPen(QColor("#10B981"))
+        painter.drawEllipse(1, 1, 14, 14)
+        painter.setPen(QColor("#FFFFFF"))
+        font = painter.font()
+        font.setPixelSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(px.rect(), 0x84, "M")  # AlignHCenter|AlignVCenter
+        painter.end()
+        return QIcon(px)
