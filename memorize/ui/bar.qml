@@ -284,25 +284,21 @@ Window {
                         }
                     }
 
-                    // Next review hint — always occupies height, text is empty when no hover
-                    Text {
-                        width: parent.width
-                        horizontalAlignment: Text.AlignHCenter
-                        text: (rootWin._hoveredRating > 0 && rootWin.nextDaysFor(rootWin._hoveredRating) > 0)
-                              ? ("下次 " + rootWin.nextDaysFor(rootWin._hoveredRating) + " 天后")
-                              : " "
-                        color: "#64748B"
-                        font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
-                    }
                 }
 
-                // Phase 1 hint — always occupies height to keep popup size stable
+                // Single bottom info line — phase hint OR next-review days (one line total)
                 Text {
                     width: parent.width
-                    text: rootWin._revealPhase === 1 ? "单击查看答案，3 秒后自动揭示" : " "
-                    color: "#475569"
-                    font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                     horizontalAlignment: Text.AlignHCenter
+                    text: {
+                        if (rootWin._revealPhase === 1)
+                            return "单击查看答案，3 秒后自动揭示"
+                        if (rootWin._hoveredRating > 0 && rootWin.nextDaysFor(rootWin._hoveredRating) > 0)
+                            return "下次 " + rootWin.nextDaysFor(rootWin._hoveredRating) + " 天后"
+                        return " "
+                    }
+                    color: rootWin._revealPhase === 1 ? "#475569" : "#64748B"
+                    font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                 }
             }
 
