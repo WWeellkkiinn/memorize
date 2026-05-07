@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 
-from fsrs import Card, Rating, FSRS
+from fsrs import Card, Rating, Scheduler
 
 log = logging.getLogger(__name__)
 
-_fsrs = FSRS()
+_fsrs = Scheduler()
 
 _CREATE_WORDS = """
 CREATE TABLE IF NOT EXISTS words (
@@ -211,7 +211,7 @@ class WordStore:
         """Apply FSRS rating and persist atomically (cards + review_logs)."""
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT fsrs_card, reps FROM cards WHERE word_id=?", (word_id,)
+                "SELECT fsrs_card FROM cards WHERE word_id=?", (word_id,)
             ).fetchone()
             if not row:
                 log.warning("rate() called for unknown word_id=%d", word_id)
@@ -219,19 +219,22 @@ class WordStore:
 
             card = Card.from_dict(json.loads(row["fsrs_card"]))
             now = _now_utc()
-            card, review_log = _fsrs.review_card(card, rating, now)
+            card, _ = _fsrs.review_card(card, rating, now)
 
-            new_card_dict = card.to_dict()
             due_str = _iso(card.due)
-
-            with conn:
+            try:
+                conn.execute("BEGIN")
                 conn.execute(
                     "UPDATE cards SET fsrs_card=?, due=?, stability=?, reps=reps+1"
                     " WHERE word_id=?",
-                    (json.dumps(new_card_dict), due_str, card.stability, word_id),
+                    (json.dumps(card.to_dict()), due_str, card.stability, word_id),
                 )
                 conn.execute(
                     "INSERT INTO review_logs(word_id, rating, reviewed_at, stability, difficulty)"
                     " VALUES(?,?,?,?,?)",
                     (word_id, rating.value, _iso(now), card.stability, card.difficulty),
                 )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise

@@ -29,10 +29,10 @@ def _sanitize_path() -> None:
     if not raw:
         return
     blocked_tokens = (
-        "\\anaconda3\\library\\bin",
-        "\\anaconda3\\dlls",
-        "\\anaconda3\\libs",
-        "\\anaconda3\\envs\\",
+        r"\anaconda3\library\bin",
+        r"\anaconda3\dlls",
+        r"\anaconda3\libs",
+        r"\anaconda3\envs\\",
     )
     kept: list[str] = []
     for item in raw.split(os.pathsep):
