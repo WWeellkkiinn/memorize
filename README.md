@@ -31,13 +31,31 @@
 pip install -r requirements.txt
 ```
 
-### 第二步：准备词库数据
+### 第二步：下载词库数据
 
-从 GitHub 下载 kajweb/dict 的 CET6 词库文件，放到项目的 `data/` 目录：
+词库来自开源项目 [kajweb/dict](https://github.com/kajweb/dict)，每个词条包含音标、释义、例句和同义词。
 
-1. 打开 https://github.com/kajweb/dict
-2. 找到 CET6 相关的 JSON 文件下载
-3. 重命名为 `cet6.json`，放到 `data/cet6.json`
+**步骤：**
+
+1. 打开 https://github.com/kajweb/dict/tree/master/book
+2. 找到你需要的词库文件（`.zip` 格式），点击文件名进入详情页，再点 **Download** 下载
+3. 把下载的 zip 文件用解压软件打开，取出里面的 `.json` 文件
+4. 重命名为 `cet6.json`，放到本项目的 `data/cet6.json`
+
+**常用词库文件名对照：**
+
+| 文件名 | 内容 | 词数 |
+|--------|------|-----:|
+| `1521164668667_CET6_1.zip` | 六级真题核心词 | 1228 |
+| `1524052554766_CET6_2.zip` | 六级英语词汇 | 2078 |
+| `1521164633851_CET6_3.zip` | 新东方六级词汇 | 2345 |
+| `1521164635506_CET4_2.zip` | 四级英语词汇 | 3739 |
+| `1521164675301_GaoZhong_2.zip` | 高中英语词汇（正序）| 3668 |
+| `1521164679263_GaoZhong_3.zip` | 新东方高中词汇 | 2340 |
+
+**建议：** 同时下载多个（如 CET6_1/2/3），`import_words.py` 只用一个 json，可以手动把多个 zip 内的 json 合并，或直接取内容最全的那个（CET6_3 词数最多）。
+
+> 如果你的单词表里有不少基础词在 CET6 词库里匹配不到，可以额外用 `CET4_2` 或 `GaoZhong_2` 再跑一遍补全——导入脚本只更新空白字段，不会覆盖已有数据（实际上是 `INSERT OR IGNORE`，已有词不会被重复插入）。
 
 ### 第三步：导入你的单词表
 
