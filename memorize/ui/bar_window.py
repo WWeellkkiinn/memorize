@@ -16,7 +16,7 @@ from memorize.ui.win32_bar import set_bottom_bar_mask, setup_toolwindow
 _QT6_QML_DIR = os.path.join(os.path.dirname(PySide6.__file__), "Qt6", "qml")
 _QML_PATH = Path(__file__).with_name("bar.qml")
 
-_BASE_BAR_W = 360
+_BASE_BAR_W = 280
 _BASE_BAR_H = 20
 
 
