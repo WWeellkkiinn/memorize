@@ -39,11 +39,12 @@ def _get_ui_scale() -> float:
 
 
 class BarWindow:
-    def __init__(self, bridge, saved_x: int | None = None) -> None:
+    def __init__(self, bridge, saved_x: int | None = None, on_ready=None) -> None:
         self._bridge = bridge
         self._saved_x = saved_x
         self._own_hwnd = 0
         self._pending_visible_h: int = 0
+        self._on_ready = on_ready  # called once after win32 setup completes
 
         sf = _get_ui_scale()
         self._bar_w = int(_BASE_BAR_W * sf)
@@ -87,12 +88,14 @@ class BarWindow:
     def _setup_win32(self) -> None:
         hwnd = int(self._win.winId())
         if not hwnd:
-            # winId() not ready yet; retry once after a short delay
             QTimer.singleShot(200, self._setup_win32)
             return
         self._own_hwnd = hwnd
         setup_toolwindow(self._own_hwnd)
         self._apply_mask(self._pending_visible_h or self._bar_h)
+        if self._on_ready:
+            self._on_ready()
+            self._on_ready = None
 
     def _apply_mask(self, visible_h: int) -> None:
         self._pending_visible_h = visible_h

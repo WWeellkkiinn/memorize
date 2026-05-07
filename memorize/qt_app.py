@@ -43,7 +43,8 @@ class MemorizeApp:
         self._qt.setQuitOnLastWindowClosed(False)
 
         self._bridge = BarBridge(self)
-        self._bar = BarWindow(self._bridge, saved_x=self._config.bar_x)
+        self._bar = BarWindow(self._bridge, saved_x=self._config.bar_x,
+                              on_ready=self._push_current_word)
 
         self._hover_active = False
 
@@ -73,9 +74,6 @@ class MemorizeApp:
         self._tray_menu.addAction("退出").triggered.connect(self.quit)
         self._tray.setContextMenu(self._tray_menu)
         self._tray.show()
-
-        # ── Initial word ──────────────────────────────────────────────────────
-        self._push_current_word()
 
         if self._config.passive_mode:
             self._word_timer.start()
