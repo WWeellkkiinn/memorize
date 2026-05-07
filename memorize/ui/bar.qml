@@ -113,7 +113,7 @@ Window {
 
         Timer { id: leaveTimer;      interval: 300;  onTriggered: container.open = false }
         Timer { id: maskShrinkTimer; interval: 300;  onTriggered: { container._maskH = container.barH; bridge.setVisibleHeight(container.barH) } }
-        Timer { id: revealTimer;     interval: 3000; onTriggered: rootWin._revealPhase = 2 }
+        Timer { id: revealTimer;     interval: 3000; onTriggered: { rootWin._revealPhase = 2; countdownTimer.stop() } }
         Timer {
             id: countdownTimer
             interval: 1000
