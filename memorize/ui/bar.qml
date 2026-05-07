@@ -14,7 +14,20 @@ Window {
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
     property int _revealPhase: 0
-    property int _countdown: 3
+    readonly property int _revealSeconds: 3   // single source of truth for reveal delay
+    property int _countdown: _revealSeconds
+
+    function resetReveal() {
+        _revealPhase = 1
+        _countdown = _revealSeconds
+        revealTimer.restart()
+        countdownTimer.restart()
+    }
+    function doReveal() {
+        _revealPhase = 2
+        revealTimer.stop()
+        countdownTimer.stop()
+    }
 
     // Style helpers
     readonly property int _fs:   Math.round(11 * sf)
@@ -41,21 +54,13 @@ Window {
         function onWordChanged(w) {
             // Reset phase BEFORE updating word so CN text is already opacity:0
             // when the new word's bindings evaluate — prevents one-frame flash
-            if (container.open) {
-                rootWin._revealPhase = 1
-                rootWin._countdown = 3
-                revealTimer.restart()
-                countdownTimer.restart()
-            }
+            if (container.open) rootWin.resetReveal()
             rootWin.word = w
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
         function onExpandTriggered() {
             container.open = true
-            rootWin._revealPhase = 1
-            rootWin._countdown = 3
-            revealTimer.restart()
-            countdownTimer.restart()
+            rootWin.resetReveal()
         }
         function onCollapseTriggered()   { container.open = false }
     }
@@ -79,16 +84,13 @@ Window {
         }
         onOpenChanged: {
             if (open) {
-                rootWin._revealPhase = 1
-                rootWin._countdown = 3
-                revealTimer.start()
-                countdownTimer.restart()
+                rootWin.resetReveal()
                 maskShrinkTimer.stop()
                 _maskH = height
                 bridge.setVisibleHeight(height)
             } else {
                 rootWin._revealPhase = 0
-                rootWin._countdown = 3
+                rootWin._countdown = rootWin._revealSeconds
                 revealTimer.stop()
                 countdownTimer.stop()
                 maskShrinkTimer.restart()
@@ -113,7 +115,7 @@ Window {
 
         Timer { id: leaveTimer;      interval: 300;  onTriggered: container.open = false }
         Timer { id: maskShrinkTimer; interval: 300;  onTriggered: { container._maskH = container.barH; bridge.setVisibleHeight(container.barH) } }
-        Timer { id: revealTimer;     interval: 3000; onTriggered: { rootWin._revealPhase = 2; countdownTimer.stop() } }
+        Timer { id: revealTimer;     interval: rootWin._revealSeconds * 1000; onTriggered: rootWin.doReveal() }
         Timer {
             id: countdownTimer
             interval: 1000
@@ -268,7 +270,7 @@ Window {
                 anchors { top: parent.top; left: parent.left; right: parent.right; bottom: barArea.top }
                 z: -1
                 enabled: rootWin._revealPhase === 1
-                onClicked: { rootWin._revealPhase = 2; revealTimer.stop(); countdownTimer.stop() }
+                onClicked: rootWin.doReveal()
             }
 
             // ── Bar area — passive word (collapsed) / rating buttons (phase 2) ─
@@ -301,13 +303,7 @@ Window {
                         dragging = false
                     }
                     onCanceled: dragging = false
-                    onClicked: {
-                        if (!dragging && rootWin._revealPhase === 1) {
-                            rootWin._revealPhase = 2
-                            revealTimer.stop()
-                            countdownTimer.stop()
-                        }
-                    }
+                    onClicked: { if (!dragging && rootWin._revealPhase === 1) rootWin.doReveal() }
                 }
 
                 // Passive word — fades out when popup opens
