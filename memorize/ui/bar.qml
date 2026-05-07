@@ -296,12 +296,10 @@ Window {
                     }
                 }
 
-                // Phase 1 hint — click or wait (height collapses when hidden)
+                // Phase 1 hint — always occupies height to keep popup size stable
                 Text {
                     width: parent.width
-                    visible: rootWin._revealPhase === 1
-                    height: visible ? implicitHeight : 0
-                    text: "单击查看答案，3 秒后自动揭示"
+                    text: rootWin._revealPhase === 1 ? "单击查看答案，3 秒后自动揭示" : " "
                     color: "#475569"
                     font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                     horizontalAlignment: Text.AlignHCenter
