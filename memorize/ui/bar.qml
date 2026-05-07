@@ -98,13 +98,13 @@ Window {
             color: "transparent"
             clip: true
 
-            // Background with rounded top corners
+            // Background with full rounded corners
             Rectangle {
                 anchors.fill: parent
                 color: "#15171D"
                 readonly property real r: Math.round(10 * rootWin.sf)
                 topLeftRadius: r; topRightRadius: r
-                bottomLeftRadius: 0; bottomRightRadius: 0
+                bottomLeftRadius: r; bottomRightRadius: r
             }
 
             // ── Detail card (expanded only) ───────────────────────────────────
@@ -120,18 +120,37 @@ Window {
                 opacity: container.open ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
-                // Definition
-                Text {
+                // Pos + Definition inline
+                Row {
                     width: parent.width
-                    text: {
-                        var pos = rootWin.posText()
-                        var def = rootWin.definitionText()
-                        if (!def) return "暂无释义"
-                        return pos ? (pos + " " + def) : def
+                    spacing: Math.round(6 * rootWin.sf)
+
+                    Rectangle {
+                        visible: rootWin.posText() !== ""
+                        width: posLabel.implicitWidth + Math.round(8 * rootWin.sf)
+                        height: posLabel.implicitHeight + Math.round(2 * rootWin.sf)
+                        radius: Math.round(3 * rootWin.sf)
+                        color: "transparent"
+                        border.color: "#475569"
+                        border.width: 1
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Text {
+                            id: posLabel
+                            anchors.centerIn: parent
+                            text: rootWin.posText()
+                            color: "#7DD3FC"
+                            font { pixelSize: rootWin._fs; family: "Consolas" }
+                        }
                     }
-                    color: "#E2E8F0"
-                    font { pixelSize: rootWin._fsLg; family: "Microsoft YaHei UI" }
-                    wrapMode: Text.WordWrap
+
+                    Text {
+                        width: parent.width - (rootWin.posText() ? Math.round(36 * rootWin.sf) : 0)
+                        text: rootWin.definitionText() || "暂无释义"
+                        color: "#F1F5F9"
+                        font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                        wrapMode: Text.WordWrap
+                    }
                 }
 
                 // Divider
@@ -154,14 +173,14 @@ Window {
                         Text {
                             width: parent.width
                             text: rootWin.examples()[index] ? rootWin.examples()[index].en : ""
-                            color: "#94A3B8"
+                            color: "#F1F5F9"
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                         }
                         Text {
                             width: parent.width
                             text: rootWin.examples()[index] ? rootWin.examples()[index].zh : ""
-                            color: "#64748B"
+                            color: "#F1F5F9"
                             font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
                             wrapMode: Text.WordWrap
                         }
@@ -187,8 +206,8 @@ Window {
                             model: [
                                 { label: "忘了",  rating: 1, base: "#7F1D1D", hover: "#991B1B" },
                                 { label: "模糊",  rating: 2, base: "#92400E", hover: "#B45309" },
-                                { label: "记得",  rating: 3, base: "#065F46", hover: "#047857" },
-                                { label: "轻松",  rating: 4, base: "#1E3A5F", hover: "#1D4ED8" }
+                                { label: "记得",  rating: 3, base: "#1E3A5F", hover: "#1D4ED8" },
+                                { label: "轻松",  rating: 4, base: "#065F46", hover: "#047857" }
                             ]
                             delegate: Rectangle {
                                 readonly property var btn: modelData
@@ -264,18 +283,12 @@ Window {
                 Text {
                     anchors { left: parent.left; leftMargin: Math.round(80 * rootWin.sf); verticalCenter: parent.verticalCenter }
                     text: rootWin.phoneticText() ? ("/" + rootWin.phoneticText() + "/") : ""
-                    color: "#64748B"
+                    color: "#F1F5F9"
                     font { pixelSize: rootWin._fs; family: "Consolas" }
                     elide: Text.ElideRight
                     width: Math.round(180 * rootWin.sf)
                 }
 
-                // Status dot (right edge)
-                Rectangle {
-                    anchors { right: parent.right; rightMargin: Math.round(10 * rootWin.sf); verticalCenter: parent.verticalCenter }
-                    width: Math.round(6 * rootWin.sf); height: width; radius: width / 2
-                    color: rootWin.word.word_id ? "#10B981" : "#EF4444"
-                }
             }
         }
     }
