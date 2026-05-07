@@ -122,11 +122,14 @@ Window {
 
                 // Pos + Definition inline
                 Row {
+                    id: posDefRow
                     width: parent.width
                     spacing: Math.round(6 * rootWin.sf)
+                    readonly property bool hasPos: rootWin.posText() !== ""
 
                     Rectangle {
-                        visible: rootWin.posText() !== ""
+                        id: posBadge
+                        visible: posDefRow.hasPos
                         width: posLabel.implicitWidth + Math.round(8 * rootWin.sf)
                         height: posLabel.implicitHeight + Math.round(2 * rootWin.sf)
                         radius: Math.round(3 * rootWin.sf)
@@ -145,7 +148,7 @@ Window {
                     }
 
                     Text {
-                        width: parent.width - (rootWin.posText() ? Math.round(36 * rootWin.sf) : 0)
+                        width: posDefRow.width - (posDefRow.hasPos ? posBadge.width + posDefRow.spacing : 0)
                         text: rootWin.definitionText() || "暂无释义"
                         color: "#F1F5F9"
                         font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }

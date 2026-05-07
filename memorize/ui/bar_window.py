@@ -45,7 +45,6 @@ class BarWindow:
         self._own_hwnd = 0
         self._pending_visible_h: int = 0
         self._on_ready = on_ready
-        self._setup_retries = 0
 
         sf = _get_ui_scale()
         self._bar_w = int(_BASE_BAR_W * sf)
@@ -86,12 +85,11 @@ class BarWindow:
         self._win.setWidth(self._bar_w)
         self._win.setHeight(ah)
 
-    def _setup_win32(self) -> None:
+    def _setup_win32(self, attempt: int = 0) -> None:
         hwnd = int(self._win.winId())
         if not hwnd:
-            self._setup_retries += 1
-            if self._setup_retries < 5:
-                QTimer.singleShot(200, self._setup_win32)
+            if attempt < 5:
+                QTimer.singleShot(200, lambda: self._setup_win32(attempt + 1))
             else:
                 # Window never became ready; fire on_ready anyway so app isn't stuck
                 if self._on_ready:

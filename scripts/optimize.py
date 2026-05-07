@@ -43,7 +43,6 @@ def main() -> None:
     optimizer = Optimizer(review_logs)
     params = optimizer.compute_optimal_parameters()
 
-    FSRS_PARAMS_PATH.parent.mkdir(parents=True, exist_ok=True)
     FSRS_PARAMS_PATH.write_text(json.dumps(params, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"Done. Parameters saved to {FSRS_PARAMS_PATH}")
