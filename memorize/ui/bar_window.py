@@ -124,13 +124,12 @@ class BarWindow:
     # ── Drag ─────────────────────────────────────────────────────────────────
 
     def _stop_snap_anim(self) -> None:
-        try:
-            if self._snap_anim:
+        if self._snap_anim:
+            try:
                 self._snap_anim.stop()
-        except RuntimeError:
-            pass
-        finally:
-            self._snap_anim = None
+            except RuntimeError:
+                pass
+        self._snap_anim = None
 
     def _move_window_x(self, x: int) -> None:
         self._stop_snap_anim()
