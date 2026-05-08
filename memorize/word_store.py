@@ -209,27 +209,16 @@ class WordStore:
         Falls back to any word when no reviewed words exist yet."""
         with self._conn() as conn:
             if exclude_id is not None:
-                row = (
-                    conn.execute(
-                        _WORD_COLS + "WHERE c.reps > 0 AND w.id != ?"
-                        " ORDER BY ABS(RANDOM()) / (c.stability + 0.1) DESC LIMIT 1",
-                        (exclude_id,),
-                    ).fetchone()
-                    or conn.execute(
-                        _WORD_COLS + "WHERE w.id != ? ORDER BY RANDOM() LIMIT 1",
-                        (exclude_id,),
-                    ).fetchone()
-                )
+                row = conn.execute(
+                    _WORD_COLS + "WHERE c.reps > 0 AND w.id != ?"
+                    " ORDER BY ABS(RANDOM()) / (c.stability + 0.1) DESC LIMIT 1",
+                    (exclude_id,),
+                ).fetchone()
             else:
-                row = (
-                    conn.execute(
-                        _WORD_COLS + "WHERE c.reps > 0"
-                        " ORDER BY ABS(RANDOM()) / (c.stability + 0.1) DESC LIMIT 1"
-                    ).fetchone()
-                    or conn.execute(
-                        _WORD_COLS + "ORDER BY RANDOM() LIMIT 1"
-                    ).fetchone()
-                )
+                row = conn.execute(
+                    _WORD_COLS + "WHERE c.reps > 0"
+                    " ORDER BY ABS(RANDOM()) / (c.stability + 0.1) DESC LIMIT 1"
+                ).fetchone()
         return dict(row) if row else None
 
     def mark_seen(self, word_id: int) -> None:
