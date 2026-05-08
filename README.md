@@ -134,10 +134,7 @@ python install.py
 ```json
 {
   "passive_mode": true,           // 开启被动模式（底部条自动轮换单词）
-  "active_mode": true,            // 开启主动提醒（定时自动弹出）
-  "word_change_interval_sec": 10, // 底部条多少秒换一个词
-  "reminder_interval_min": 30,    // 主动提醒间隔（分钟）
-  "auto_dismiss_sec": 8           // 主动弹出后多少秒没操作自动收起
+  "word_change_interval_sec": 10  // 底部条多少秒换一个词
 }
 ```
 
