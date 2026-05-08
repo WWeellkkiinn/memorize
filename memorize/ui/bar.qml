@@ -7,6 +7,7 @@ Window {
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "transparent"
     visible: true
+    onClosing: bridge.quit()
 
     property var word: ({})        // active (FSRS) word — expanded popup
     property var passiveWord: ({}) // passive bar word — collapsed bar
