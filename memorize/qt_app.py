@@ -6,8 +6,8 @@ import logging.handlers
 import sys
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QGuiApplication, QIcon, QPixmap, QPainter, QColor
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
 
 from fsrs import Rating
 
@@ -57,15 +57,6 @@ class MemorizeApp:
         # ── Primary screen change ─────────────────────────────────────────────
         QGuiApplication.instance().primaryScreenChanged.connect(self._on_screen_changed)
 
-        # ── System tray ───────────────────────────────────────────────────────
-        self._tray = QSystemTrayIcon()
-        self._tray.setToolTip("Memorize — 背单词")
-        self._tray.setIcon(self._make_tray_icon())
-        self._tray_menu = QMenu()           # kept as attribute to prevent GC
-        self._tray_menu.addAction("退出").triggered.connect(self.quit)
-        self._tray.setContextMenu(self._tray_menu)
-        self._tray.show()
-
         # Timers start in _push_current_word (on_ready) so they never
         # fire before the first word has been pushed to QML.
 
@@ -92,7 +83,6 @@ class MemorizeApp:
         save_config(self._config)
 
     def quit(self) -> None:
-        self._tray.hide()
         self._qt.quit()
 
     # ── Timer callbacks ───────────────────────────────────────────────────────
@@ -142,21 +132,3 @@ class MemorizeApp:
     def run(self) -> int:
         return self._qt.exec()
 
-    @staticmethod
-    def _make_tray_icon() -> QIcon:
-        """Create a simple 16x16 green 'M' icon for the system tray."""
-        px = QPixmap(16, 16)
-        px.fill(QColor(0, 0, 0, 0))
-        painter = QPainter(px)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setBrush(QColor("#10B981"))
-        painter.setPen(QColor("#10B981"))
-        painter.drawEllipse(1, 1, 14, 14)
-        painter.setPen(QColor("#FFFFFF"))
-        font = painter.font()
-        font.setPixelSize(9)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.drawText(px.rect(), 0x84, "M")  # AlignHCenter|AlignVCenter
-        painter.end()
-        return QIcon(px)
