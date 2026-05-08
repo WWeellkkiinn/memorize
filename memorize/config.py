@@ -23,7 +23,7 @@ class Config:
     bar_x: int | None = None
     passive_mode: bool = True
     active_mode: bool = True
-    word_change_interval_sec: int = 60
+    word_change_interval_sec: int = 20
     reminder_interval_min: int = 30
     auto_dismiss_sec: int = 8
 

@@ -10,6 +10,7 @@ Window {
 
     property var word: ({})        // active (FSRS) word — expanded popup
     property var passiveWord: ({}) // passive bar word — collapsed bar
+    property var _displayPassiveWord: ({})
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
@@ -48,6 +49,14 @@ Window {
         catch(e) { _parsedExamples = [] }
     }
     function examples() { return _parsedExamples }
+
+    onPassiveWordChanged: {
+        if (container.open) {
+            _displayPassiveWord = passiveWord
+        } else {
+            passiveFader.restart()
+        }
+    }
 
     Connections {
         target: bridge
@@ -285,34 +294,45 @@ Window {
                     onClicked: { if (!dragging && rootWin._revealPhase === 1) rootWin.doReveal() }
                 }
 
-                // Passive word — fades out when popup opens
-                Row {
+                // Passive word — fades out when popup opens, fades in/out on word change
+                Item {
                     anchors {
                         left: parent.left; leftMargin: Math.round(10 * rootWin.sf)
+                        right: parent.right; rightMargin: Math.round(10 * rootWin.sf)
                         verticalCenter: parent.verticalCenter
                     }
-                    spacing: Math.round(8 * rootWin.sf)
+                    height: parent.height
                     opacity: container.open ? 0.0 : 1.0
                     Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                    Text {
-                        text: passiveWord.word || "—"
-                        color: "#F1F5F9"
-                        font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
-                    }
-                    Text {
-                        text: passiveWord.phonetic ? "/" + passiveWord.phonetic + "/" : ""
-                        color: "#94A3B8"
-                        font { pixelSize: rootWin._fs; family: "Consolas" }
+                    Row {
+                        id: passiveRow
                         anchors.verticalCenter: parent.verticalCenter
+                        spacing: Math.round(8 * rootWin.sf)
+
+                        Text {
+                            id: passiveWordText
+                            text: rootWin._displayPassiveWord.word || "—"
+                            color: "#F1F5F9"
+                            font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: rootWin._displayPassiveWord.definition || ""
+                            color: "#F1F5F9"
+                            font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
+                            elide: Text.ElideRight
+                            width: barArea.width - Math.round(20 * rootWin.sf)
+                                   - passiveWordText.implicitWidth - Math.round(8 * rootWin.sf)
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
-                    Text {
-                        text: passiveWord.definition || ""
-                        color: "#64748B"
-                        font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI" }
-                        elide: Text.ElideRight
-                        width: barArea.width - Math.round(20 * rootWin.sf)
-                        anchors.verticalCenter: parent.verticalCenter
+
+                    SequentialAnimation {
+                        id: passiveFader
+                        NumberAnimation { target: passiveRow; property: "opacity"; to: 0.0; duration: 200 }
+                        ScriptAction { script: rootWin._displayPassiveWord = rootWin.passiveWord }
+                        NumberAnimation { target: passiveRow; property: "opacity"; to: 1.0; duration: 200 }
                     }
                 }
 
