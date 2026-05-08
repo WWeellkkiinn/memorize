@@ -123,15 +123,19 @@ class BarWindow:
 
     # ── Drag ─────────────────────────────────────────────────────────────────
 
-    def _move_window_x(self, x: int) -> None:
+    def _stop_snap_anim(self) -> None:
         try:
-            if self._snap_anim and self._snap_anim.state() != QAbstractAnimation.State.Stopped:
+            if self._snap_anim:
                 self._snap_anim.stop()
         except RuntimeError:
+            pass
+        finally:
             self._snap_anim = None
+
+    def _move_window_x(self, x: int) -> None:
+        self._stop_snap_anim()
         ax, _ay, aw, _ah = _primary_ag()
-        clamped = max(ax, min(x, ax + aw - self._bar_w))
-        self._win.setX(clamped)
+        self._win.setX(max(ax, min(x, ax + aw - self._bar_w)))
 
     def _commit_window_x(self, x: int) -> None:
         ax, _ay, aw, _ah = _primary_ag()
@@ -140,17 +144,10 @@ class BarWindow:
             self._animate_to_x(center_x)
             self._bridge.commit_bar_x(center_x)
         else:
-            clamped = max(ax, min(x, ax + aw - self._bar_w))
-            self._bridge.commit_bar_x(clamped)
+            self._bridge.commit_bar_x(max(ax, min(x, ax + aw - self._bar_w)))
 
     def _animate_to_x(self, target_x: int) -> None:
-        try:
-            if self._snap_anim:
-                self._snap_anim.stop()
-        except RuntimeError:
-            pass
-        finally:
-            self._snap_anim = None
+        self._stop_snap_anim()
         try:
             anim = QPropertyAnimation(self._win, b"x")
             anim.setDuration(250)
