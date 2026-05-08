@@ -7,3 +7,5 @@ build/
 *.spec
 .python-path
 data/cet6.json
+data/words.txt
+data/*.md
