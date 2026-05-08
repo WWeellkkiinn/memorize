@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QAbstractAnimation, QEasingCurve, QPropertyAnimation, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -45,6 +45,7 @@ class BarWindow:
         self._own_hwnd = 0
         self._pending_visible_h: int = 0
         self._on_ready = on_ready
+        self._snap_anim: QPropertyAnimation | None = None
 
         sf = _get_ui_scale()
         self._bar_w = int(_BASE_BAR_W * sf)
@@ -123,12 +124,41 @@ class BarWindow:
     # ── Drag ─────────────────────────────────────────────────────────────────
 
     def _move_window_x(self, x: int) -> None:
+        try:
+            if self._snap_anim and self._snap_anim.state() != QAbstractAnimation.State.Stopped:
+                self._snap_anim.stop()
+        except RuntimeError:
+            self._snap_anim = None
         ax, _ay, aw, _ah = _primary_ag()
         clamped = max(ax, min(x, ax + aw - self._bar_w))
         self._win.setX(clamped)
 
     def _commit_window_x(self, x: int) -> None:
         ax, _ay, aw, _ah = _primary_ag()
-        clamped = max(ax, min(x, ax + aw - self._bar_w))
-        self._bridge.commit_bar_x(clamped)
+        center_x = ax + (aw - self._bar_w) // 2
+        if x <= ax or x >= ax + aw - self._bar_w:
+            self._animate_to_x(center_x)
+            self._bridge.commit_bar_x(center_x)
+        else:
+            clamped = max(ax, min(x, ax + aw - self._bar_w))
+            self._bridge.commit_bar_x(clamped)
+
+    def _animate_to_x(self, target_x: int) -> None:
+        try:
+            if self._snap_anim:
+                self._snap_anim.stop()
+        except RuntimeError:
+            pass
+        finally:
+            self._snap_anim = None
+        try:
+            anim = QPropertyAnimation(self._win, b"x")
+            anim.setDuration(250)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.setEndValue(target_x)
+            anim.finished.connect(lambda: setattr(self, "_snap_anim", None))
+            anim.start()
+            self._snap_anim = anim
+        except RuntimeError:
+            pass
 

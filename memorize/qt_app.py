@@ -54,16 +54,6 @@ class MemorizeApp:
         self._word_timer.setInterval(self._config.word_change_interval_sec * 1000)
         self._word_timer.timeout.connect(self._on_word_timer)
 
-        self._remind_timer = QTimer()
-        self._remind_timer.setInterval(self._config.reminder_interval_min * 60 * 1000)
-        self._remind_timer.setSingleShot(False)
-        self._remind_timer.timeout.connect(self._on_remind_timer)
-
-        self._dismiss_timer = QTimer()
-        self._dismiss_timer.setInterval(self._config.auto_dismiss_sec * 1000)
-        self._dismiss_timer.setSingleShot(True)
-        self._dismiss_timer.timeout.connect(self._on_dismiss_timer)
-
         # ── Primary screen change ─────────────────────────────────────────────
         QGuiApplication.instance().primaryScreenChanged.connect(self._on_screen_changed)
 
@@ -85,14 +75,12 @@ class MemorizeApp:
         rating = _RATING_MAP.get(rating_int, Rating.Good)
         log.info("rated word_id=%d rating=%s", word_id, rating)
         self._scheduler.rate(word_id, rating)
-        self._dismiss_timer.stop()
         self._advance_and_push()
         # Card stays open; hover state and timers managed by hover enter/leave
 
     def on_hover_enter(self) -> None:
         self._hover_active = True
         self._word_timer.stop()
-        self._dismiss_timer.stop()
 
     def on_hover_leave(self) -> None:
         self._hover_active = False
@@ -114,16 +102,6 @@ class MemorizeApp:
             return
         self._push_passive_word()
 
-    def _on_remind_timer(self) -> None:
-        if self._hover_active:
-            return  # user is already looking at a word
-        self._advance_and_push()
-        self._bridge.expandTriggered.emit()
-        self._dismiss_timer.start()
-
-    def _on_dismiss_timer(self) -> None:
-        self._bridge.collapseTriggered.emit()
-
     def _on_screen_changed(self) -> None:
         self._bar.reposition()
 
@@ -135,8 +113,6 @@ class MemorizeApp:
         self._push_passive_word()
         if self._config.passive_mode:
             self._word_timer.start()
-        if self._config.active_mode:
-            self._remind_timer.start()
 
     def _push_passive_word(self) -> None:
         word = self._store.get_random_word(exclude_id=self._passive_word_id)

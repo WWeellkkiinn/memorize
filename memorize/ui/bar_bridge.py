@@ -8,8 +8,6 @@ class BarBridge(QObject):
     # Python → QML
     wordChanged = Signal("QVariantMap")        # active (FSRS) word
     passiveWordChanged = Signal("QVariantMap") # passive bar word
-    expandTriggered = Signal()
-    collapseTriggered = Signal()
     maskHeightChanged = Signal(int)
     moveWindowX = Signal(int)
     commitWindowX = Signal(int)

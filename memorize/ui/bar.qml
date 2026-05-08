@@ -67,11 +67,6 @@ Window {
             rootWin.word = w
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
-        function onExpandTriggered() {
-            container.open = true
-            rootWin.resetReveal()
-        }
-        function onCollapseTriggered()   { container.open = false }
     }
 
     // ── Container ─────────────────────────────────────────────────────────────

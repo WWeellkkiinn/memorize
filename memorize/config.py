@@ -22,10 +22,7 @@ FSRS_PARAMS_PATH = _appdata_dir() / "fsrs_params.json"
 class Config:
     bar_x: int | None = None
     passive_mode: bool = True
-    active_mode: bool = True
     word_change_interval_sec: int = 10
-    reminder_interval_min: int = 30
-    auto_dismiss_sec: int = 8
 
 
 def load_config() -> Config:
@@ -44,15 +41,8 @@ def load_config() -> Config:
         return Config(
             bar_x=bar_x,
             passive_mode=bool(data.get("passive_mode", defaults.passive_mode)),
-            active_mode=bool(data.get("active_mode", defaults.active_mode)),
             word_change_interval_sec=max(5, int(
                 data.get("word_change_interval_sec", defaults.word_change_interval_sec)
-            )),
-            reminder_interval_min=max(1, int(
-                data.get("reminder_interval_min", defaults.reminder_interval_min)
-            )),
-            auto_dismiss_sec=max(1, int(
-                data.get("auto_dismiss_sec", defaults.auto_dismiss_sec)
             )),
         )
     except (TypeError, ValueError):
