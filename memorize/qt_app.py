@@ -99,7 +99,7 @@ class MemorizeApp:
 
     def _push_current_word(self) -> None:
         word = self._scheduler.current_word()
-        self._bridge.push_word(self._word_to_payload(word))
+        self._bridge.push_word(self._word_to_payload(word, self._store.get_today_stats()))
         self._push_passive_word()
         if self._config.passive_mode:
             self._word_timer.start()
@@ -114,20 +114,26 @@ class MemorizeApp:
 
     def _advance_and_push(self) -> None:
         word = self._scheduler.advance()
-        self._bridge.push_word(self._word_to_payload(word))
+        self._bridge.push_word(self._word_to_payload(word, self._store.get_today_stats()))
 
     @staticmethod
-    def _word_to_payload(word: dict | None) -> dict:
-        if not word:
-            return {}
-        return {
-            "word_id": word.get("id", 0),
-            "word": word.get("word", ""),
-            "phonetic": word.get("phonetic", ""),
-            "pos": word.get("pos", ""),
-            "definition": word.get("definition", ""),
-            "examples": word.get("examples", "[]"),
-        }
+    def _word_to_payload(word: dict | None, stats: dict | None = None) -> dict:
+        payload: dict = {}
+        if word:
+            payload = {
+                "word_id": word.get("id", 0),
+                "word": word.get("word", ""),
+                "phonetic": word.get("phonetic", ""),
+                "pos": word.get("pos", ""),
+                "definition": word.get("definition", ""),
+                "examples": word.get("examples", "[]"),
+            }
+        if stats:
+            payload["todayNew"]           = stats["newWords"]
+            payload["todayNewTotal"]      = stats["newTotal"]
+            payload["todayReviewed"]      = stats["reviewedWords"]
+            payload["todayReviewedTotal"] = stats["reviewedTotal"]
+        return payload
 
     def run(self) -> int:
         return self._qt.exec()

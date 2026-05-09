@@ -12,6 +12,10 @@ Window {
     property var word: ({})        // active (FSRS) word — expanded popup
     property var passiveWord: ({}) // passive bar word — collapsed bar
     property var _displayPassiveWord: ({})
+    property int todayNew: 0
+    property int todayNewTotal: 0
+    property int todayReviewed: 0
+    property int todayReviewedTotal: 0
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
@@ -66,6 +70,10 @@ Window {
             // when the new word's bindings evaluate — prevents one-frame flash
             if (container.open) rootWin.resetReveal()
             rootWin.word = w
+            if (w.todayNew !== undefined)           rootWin.todayNew           = w.todayNew
+            if (w.todayNewTotal !== undefined)      rootWin.todayNewTotal      = w.todayNewTotal
+            if (w.todayReviewed !== undefined)      rootWin.todayReviewed      = w.todayReviewed
+            if (w.todayReviewedTotal !== undefined) rootWin.todayReviewedTotal = w.todayReviewedTotal
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
     }
@@ -196,16 +204,32 @@ Window {
                     }
                 }
 
-                // Phase 1: countdown hint; Phase 2: CN definition (same element, no blank line)
-                Text {
+                // Phase 1: countdown hint overlaid on hidden definition — height always = phase-2 size
+                Item {
                     width: parent.width
-                    text: rootWin._revealPhase >= 2
-                          ? (rootWin.definitionText() || "暂无释义")
-                          : ("单击查看答案，" + rootWin._countdown + " 秒后自动揭示")
-                    color: rootWin._revealPhase >= 2 ? "#F1F5F9" : "#475569"
-                    font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
-                    wrapMode: Text.WordWrap
-                    Behavior on color { ColorAnimation { duration: 200 } }
+                    implicitHeight: Math.max(_defText.implicitHeight, _countdownText.implicitHeight)
+
+                    Text {
+                        id: _defText
+                        width: parent.width
+                        text: rootWin.definitionText() || "暂无释义"
+                        color: "#F1F5F9"
+                        font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                        wrapMode: Text.WordWrap
+                        opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                    }
+
+                    Text {
+                        id: _countdownText
+                        width: parent.width
+                        text: "单击查看答案，" + rootWin._countdown + " 秒后自动揭示"
+                        color: "#475569"
+                        font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
+                        wrapMode: Text.WordWrap
+                        opacity: rootWin._revealPhase >= 2 ? 0.0 : 1.0
+                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                    }
                 }
 
                 // Divider + examples (EN always visible; CN phase 2 only)
@@ -245,6 +269,15 @@ Window {
                             }
                         }
                     }
+                }
+
+                // Today stats — always visible, right-aligned
+                Text {
+                    anchors.right: parent.right
+                    text: "共 " + (rootWin.todayNewTotal + rootWin.todayReviewedTotal) + "次 | 📗"
+                          + rootWin.todayNew + " | 📘" + rootWin.todayReviewed
+                    color: "#F1F5F9"
+                    font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
                 }
 
             }

@@ -5,7 +5,7 @@ import json
 import logging
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Generator
 
@@ -289,6 +289,31 @@ class WordStore:
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
                 raise
+
+    def get_today_stats(self) -> dict:
+        now = datetime.now().astimezone()
+        today = _today()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        utc_start = _iso(day_start.astimezone(timezone.utc))
+        utc_end = _iso((day_start + timedelta(days=1)).astimezone(timezone.utc))
+        with self._conn() as conn:
+            r = conn.execute(
+                "SELECT"
+                " COALESCE(SUM(CASE WHEN c.introduced_date=? THEN 1 END), 0) AS new_total,"
+                " COUNT(DISTINCT CASE WHEN c.introduced_date=? THEN rl.word_id END) AS new_words,"
+                " COALESCE(SUM(CASE WHEN c.introduced_date IS NULL OR c.introduced_date!=? THEN 1 END), 0) AS rev_total,"
+                " COUNT(DISTINCT CASE WHEN c.introduced_date IS NULL OR c.introduced_date!=? THEN rl.word_id END) AS rev_words"
+                " FROM review_logs rl"
+                " LEFT JOIN cards c ON c.word_id = rl.word_id"
+                " WHERE rl.reviewed_at>=? AND rl.reviewed_at<?",
+                (today, today, today, today, utc_start, utc_end),
+            ).fetchone()
+        return {
+            "newWords":      r["new_words"]  or 0,
+            "newTotal":      r["new_total"]  or 0,
+            "reviewedWords": r["rev_words"]  or 0,
+            "reviewedTotal": r["rev_total"]  or 0,
+        }
 
     def get_review_logs_for_optimizer(self) -> list[FsrsReviewLog]:
         """Return all ReviewLog objects suitable for fsrs.Optimizer."""
