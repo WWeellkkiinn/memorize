@@ -16,6 +16,7 @@ Window {
     property int todayNewTotal: 0
     property int todayReviewed: 0
     property int todayReviewedTotal: 0
+    property int retentionPct: -2  // -2 = no word; -1 = new word; 0-100 = R%
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
@@ -74,6 +75,8 @@ Window {
             if (w.todayNewTotal !== undefined)      rootWin.todayNewTotal      = w.todayNewTotal
             if (w.todayReviewed !== undefined)      rootWin.todayReviewed      = w.todayReviewed
             if (w.todayReviewedTotal !== undefined) rootWin.todayReviewedTotal = w.todayReviewedTotal
+            if (w.retentionPct !== undefined)       rootWin.retentionPct       = w.retentionPct
+            else                                    rootWin.retentionPct       = -2
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
     }
@@ -271,13 +274,32 @@ Window {
                     }
                 }
 
-                // Today stats — always visible, right-aligned
-                Text {
-                    anchors.right: parent.right
-                    text: "共 " + (rootWin.todayNewTotal + rootWin.todayReviewedTotal) + "次 | 📗"
-                          + rootWin.todayNew + " | 📘" + rootWin.todayReviewed
-                    color: "#F1F5F9"
-                    font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
+                // Stats row: retention left, today counts right
+                Item {
+                    width: parent.width
+                    height: _statsRight.implicitHeight
+
+                    Text {
+                        id: _retentionLabel
+                        anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                        visible: rootWin.retentionPct >= -1
+                        text: rootWin.retentionPct === -1 ? "🧠 新词"
+                                                          : "🧠 " + rootWin.retentionPct + "%"
+                        color: rootWin.retentionPct === -1  ? "#94A3B8"
+                             : rootWin.retentionPct >= 80   ? "#4ADE80"
+                             : rootWin.retentionPct >= 50   ? "#FACC15"
+                             :                                "#F87171"
+                        font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
+                    }
+
+                    Text {
+                        id: _statsRight
+                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                        text: "共 " + (rootWin.todayNewTotal + rootWin.todayReviewedTotal) + "次 | 📗"
+                              + rootWin.todayNew + " | 📘" + rootWin.todayReviewed
+                        color: "#F1F5F9"
+                        font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
+                    }
                 }
 
             }

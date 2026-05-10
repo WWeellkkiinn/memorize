@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import sys
+from datetime import datetime, timezone
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
@@ -117,6 +118,24 @@ class MemorizeApp:
         self._bridge.push_word(self._word_to_payload(word, self._store.get_today_stats()))
 
     @staticmethod
+    def _retention_pct(word: dict) -> int:
+        reps = word.get("reps", 0)
+        stability = word.get("stability", 0.0)
+        due_str = word.get("due", "")
+        if reps == 0 or stability <= 0 or not due_str:
+            return -1
+        try:
+            due_dt = datetime.fromisoformat(due_str)
+            if due_dt.tzinfo is None:
+                due_dt = due_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            elapsed_days = max(0.0, stability + (now - due_dt).total_seconds() / 86400)
+            r = (1 + (19 / 81) * elapsed_days / stability) ** -0.5
+            return round(r * 100)
+        except (ValueError, TypeError):
+            return -1
+
+    @staticmethod
     def _word_to_payload(word: dict | None, stats: dict | None = None) -> dict:
         payload: dict = {}
         if word:
@@ -127,6 +146,7 @@ class MemorizeApp:
                 "pos": word.get("pos", ""),
                 "definition": word.get("definition", ""),
                 "examples": word.get("examples", "[]"),
+                "retentionPct": MemorizeApp._retention_pct(word),
             }
         if stats:
             payload["todayNew"]           = stats["newWords"]
