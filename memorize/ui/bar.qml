@@ -25,6 +25,8 @@ Window {
     property int _countdown: _revealSeconds
 
     function resetReveal() {
+        defFadeIn.stop()
+        _defText.opacity = 0
         _revealPhase = 1
         _countdown = _revealSeconds
         revealTimer.restart()
@@ -32,6 +34,7 @@ Window {
     }
     function doReveal() {
         _revealPhase = 2
+        defFadeIn.start()
         revealTimer.stop()
         countdownTimer.stop()
     }
@@ -105,6 +108,8 @@ Window {
                 _maskH = height
                 bridge.setVisibleHeight(height)
             } else {
+                defFadeIn.stop()
+                _defText.opacity = 0
                 rootWin._revealPhase = 0
                 rootWin._countdown = rootWin._revealSeconds
                 revealTimer.stop()
@@ -219,8 +224,14 @@ Window {
                         color: "#F1F5F9"
                         font { pixelSize: rootWin._fsLg; bold: true; family: "Microsoft YaHei UI" }
                         wrapMode: Text.WordWrap
-                        opacity: rootWin._revealPhase >= 2 ? 1.0 : 0.0
-                        Behavior on opacity { NumberAnimation { duration: 200 } }
+                        opacity: 0
+
+                        NumberAnimation {
+                            id: defFadeIn
+                            target: _defText; property: "opacity"
+                            from: 0; to: 1; duration: 200
+                            running: false
+                        }
                     }
 
                     Text {
