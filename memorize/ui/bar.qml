@@ -16,7 +16,7 @@ Window {
     property int todayNewTotal: 0
     property int todayReviewed: 0
     property int todayReviewedTotal: 0
-    property int retentionPct: -2  // -2 = no word; -1 = new word; 0-100 = R%
+    property string wordStage: ""  // "": no word; "新词/初识/记忆/熟悉/掌握"
     property real sf: (typeof scaleFactor !== "undefined") ? scaleFactor : 1.0
 
     // Reveal phase: 0=collapsed, 1=self-test (CN hidden), 2=revealed
@@ -78,8 +78,7 @@ Window {
             if (w.todayNewTotal !== undefined)      rootWin.todayNewTotal      = w.todayNewTotal
             if (w.todayReviewed !== undefined)      rootWin.todayReviewed      = w.todayReviewed
             if (w.todayReviewedTotal !== undefined) rootWin.todayReviewedTotal = w.todayReviewedTotal
-            if (w.retentionPct !== undefined)       rootWin.retentionPct       = w.retentionPct
-            else                                    rootWin.retentionPct       = -2
+            rootWin.wordStage = w.wordStage
         }
         function onPassiveWordChanged(w) { rootWin.passiveWord = w }
     }
@@ -293,23 +292,23 @@ Window {
                     Text {
                         id: _retentionLabel
                         anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                        visible: rootWin.retentionPct >= -1
-                        text: rootWin.retentionPct === -1 ? "🧠 新词"
-                                                          : "🧠 " + rootWin.retentionPct + "%"
-                        color: rootWin.retentionPct === -1  ? "#94A3B8"
-                             : rootWin.retentionPct >= 80   ? "#4ADE80"
-                             : rootWin.retentionPct >= 50   ? "#FACC15"
-                             :                                "#F87171"
-                        font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
+                        visible: rootWin.wordStage !== ""
+                        text: "🧠 " + rootWin.wordStage
+                        color: rootWin.wordStage === "掌握" ? "#FDE725"
+                             : rootWin.wordStage === "熟悉" ? "#7AD151"
+                             : rootWin.wordStage === "记忆" ? "#22A884"
+                             : rootWin.wordStage === "初识" ? "#40B4D8"
+                             :                                "#8B85D0"
+                        font { pixelSize: rootWin._fs; family: "Microsoft YaHei UI"; bold: true }
                     }
 
                     Text {
                         id: _statsRight
                         anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                        text: "共 " + (rootWin.todayNewTotal + rootWin.todayReviewedTotal) + "次 | 📗"
+                        text: "共" + (rootWin.todayNewTotal + rootWin.todayReviewedTotal) + "次 | 📗"
                               + rootWin.todayNew + " | 📘" + rootWin.todayReviewed
                         color: "#F1F5F9"
-                        font { pixelSize: rootWin._fs; family: "Segoe UI Emoji" }
+                        font { pixelSize: rootWin._fs; family: "Segoe UI Emoji"; bold: true }
                     }
                 }
 
