@@ -61,14 +61,33 @@ function clearTimers() {
   state.revealTimer = null;
 }
 
+// 卡片高度平滑过渡：锁定当前高度 → 执行 DOM 更新 → 动画到新高度
+function animateCardHeight(callback) {
+  const from = card.offsetHeight;
+  card.style.height = from + 'px';
+  card.style.overflow = 'hidden';
+  callback();
+  card.style.height = 'auto';
+  const to = card.offsetHeight;
+  card.style.height = from + 'px';
+  void card.offsetHeight; // force reflow
+  card.style.transition = 'height 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+  card.style.height = to + 'px';
+  card.addEventListener('transitionend', () => {
+    card.style.height = '';
+    card.style.overflow = '';
+    card.style.transition = '';
+  }, { once: true });
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function renderStats() {
   const w = state.word;
   const s = state.stats;
   if (w) {
-    statStage.textContent  = w.stage || '';
-    statStage.style.color  = STAGE_COLORS[w.stage] || 'var(--text-muted)';
+    statStage.textContent = w.stage || '';
+    statStage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
   }
   if (s) {
     const total = s.newTotal + s.reviewedTotal;
@@ -89,9 +108,9 @@ function renderWord() {
   const w = state.word;
   if (!w) return;
 
-  wordPos.textContent    = w.pos || '';
-  wordText.textContent   = w.word || '';
-  wordPhone.textContent  = w.phonetic ? `/${w.phonetic}/` : '';
+  wordPos.textContent   = w.pos || '';
+  wordText.textContent  = w.word || '';
+  wordPhone.textContent = w.phonetic ? `/${w.phonetic}/` : '';
 
   definition.textContent = w.definition || '';
 
@@ -142,6 +161,11 @@ function setPhase(n) {
     show(examples);
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
     show(ratingRow);
+    // 揭示 fade-in 动画
+    definition.classList.add('revealing');
+    examples.classList.add('revealing');
+    definition.addEventListener('animationend', () => definition.classList.remove('revealing'), { once: true });
+    examples.addEventListener('animationend',   () => examples.classList.remove('revealing'),   { once: true });
   }
 }
 
@@ -166,6 +190,7 @@ async function fetchWord() {
 }
 
 async function submitRating(rating) {
+  card.classList.add('loading');
   ratingRow.querySelectorAll('button').forEach(b => b.disabled = true);
   try {
     const res  = await fetch('/api/rate', {
@@ -180,7 +205,7 @@ async function submitRating(rating) {
     state.intervals = data.intervals;
     renderStats();
     if (!data.word) return;
-    setPhase(1);
+    animateCardHeight(() => setPhase(1));
   } catch (e) {
     hintText.textContent = '提交失败，请重试';
     hide(hintArea);
@@ -189,6 +214,7 @@ async function submitRating(rating) {
     show(ratingRow);
     state.phase = 2;
   } finally {
+    card.classList.remove('loading');
     ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
   }
 }

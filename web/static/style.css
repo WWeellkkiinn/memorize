@@ -41,6 +41,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
@@ -64,7 +65,11 @@ body {
     rgba(99, 102, 241, 0.025) 0%,
     transparent 60px
   );
+  transition: opacity 0.15s ease, transform 0.08s ease;
 }
+
+#card:active  { transform: scale(0.998); }
+#card.loading { opacity: 0.45; pointer-events: none; }
 
 /* ── Card Header ───────────────────────────────────────────────────────────── */
 
@@ -127,7 +132,7 @@ body {
 }
 
 #hint-text {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-muted);
   text-align: center;
   padding: 4px 0 12px;
@@ -209,7 +214,7 @@ body {
   transition: transform 0.1s ease;
 }
 
-.rating-btn:active  { transform: scale(0.95); }
+.rating-btn:active   { transform: scale(0.95); }
 .rating-btn:disabled { opacity: 0.45; }
 
 .interval { display: none; }
@@ -248,6 +253,25 @@ body {
   border-radius: 50%;
   background: currentColor;
   flex-shrink: 0;
+}
+
+/* ── Animations ────────────────────────────────────────────────────────────── */
+
+@keyframes fadeReveal {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.revealing {
+  animation: fadeReveal 0.22s ease-out both;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .revealing           { animation: none; }
+  #card                { transition: none !important; }
+  .rating-btn          { transition: none; }
 }
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */
