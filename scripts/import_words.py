@@ -27,19 +27,16 @@ def _build_index(cet6_path: Path) -> dict[str, dict]:
     text = cet6_path.read_text(encoding="utf-8").strip()
     index: dict[str, dict] = {}
 
-    # Try JSON array first, fall back to JSONL (one object per line)
-    if text.startswith('[') or text.startswith('{') and '\n{' not in text:
+    try:
         raw = json.loads(text)
         entries = raw if isinstance(raw, list) else raw.get("words", [])
-    else:
+    except json.JSONDecodeError:
         entries = [json.loads(line) for line in text.splitlines() if line.strip()]
     for entry in entries:
-        # Support both flat and nested kajweb/dict formats
         word = (entry.get("headWord") or entry.get("word") or "").strip().lower()
         if not word:
             continue
         index[word] = entry
-        index[word]["_rank"] = entry.get("wordRank") or 0
     return index
 
 
@@ -83,7 +80,7 @@ def _extract(entry: dict) -> dict:
         "pos": pos,
         "definition": definition,
         "examples": examples,
-        "rank": entry.get("_rank") or entry.get("wordRank") or 0,
+        "rank": entry.get("wordRank") or 0,
     }
 
 

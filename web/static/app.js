@@ -82,11 +82,15 @@ function regularForms(baseWord) {
   return [...forms].sort((a, b) => b.length - a.length);
 }
 
+let _wordRegexCache = { word: null, re: null };
 function buildWordRegex(baseWord) {
+  if (_wordRegexCache.word === baseWord) return _wordRegexCache.re;
   const forms = regularForms(baseWord);
-  if (!forms.length) return null;
-  const escaped = forms.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return new RegExp(`(^|[^A-Za-z])(${escaped.join('|')})(?=$|[^A-Za-z])`, 'gi');
+  const re = forms.length
+    ? new RegExp(`(^|[^A-Za-z])(${forms.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?=$|[^A-Za-z])`, 'gi')
+    : null;
+  _wordRegexCache = { word: baseWord, re };
+  return re;
 }
 
 function highlightWordHtml(sentence, re) {
@@ -277,10 +281,17 @@ function cardAnimate(name, duration, easing = 'ease') {
 }
 
 async function submitRating(rating) {
+  const btns = ratingRow.querySelectorAll('button');
   card.classList.add('loading');
-  ratingRow.querySelectorAll('button').forEach(b => b.disabled = true);
+  btns.forEach(b => b.disabled = true);
+
+  function reset() {
+    card.style.animation = '';
+    card.classList.remove('loading');
+    btns.forEach(b => b.disabled = false);
+  }
+
   try {
-    // 退场动画与 API 并行
     const [res] = await Promise.all([
       fetch('/api/rate', {
         method:  'POST',
@@ -294,33 +305,21 @@ async function submitRating(rating) {
     state.word      = data.word;
     state.stats     = data.stats;
     state.intervals = data.intervals;
-    if (!data.word) {
-      card.style.animation = '';
-      card.classList.remove('loading');
-      ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
-      return;
-    }
+    if (!data.word) { reset(); return; }
 
-    // 换内容（此时卡片不可见）
     renderStats();
     setPhase(1);
-    card.style.animation = '';
-
-    // 入场动画（spring 弹入）
-    card.classList.remove('loading');
-    ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
+    reset();
     await cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
     card.style.animation = '';
 
   } catch (e) {
-    card.style.animation = '';
-    card.classList.remove('loading');
+    reset();
     hintText.textContent = '提交失败，请重试';
     hide(hintArea);
     visShow(definition);
     show(ratingRow);
     state.phase = 2;
-    ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
   }
 }
 

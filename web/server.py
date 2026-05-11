@@ -23,10 +23,6 @@ if not _AUTH_USER or not _AUTH_PASS:
     raise RuntimeError("AUTH_USER and AUTH_PASS environment variables must be set")
 
 _STATIC = Path(__file__).parent / "static"
-_UNAUTH = Response(
-    status_code=401,
-    headers={"WWW-Authenticate": 'Basic realm="memorize"'},
-)
 
 
 def _check_basic_auth(request: Request) -> bool:
@@ -82,7 +78,7 @@ app = FastAPI(lifespan=lifespan)
 @app.middleware("http")
 async def basic_auth_middleware(request: Request, call_next):
     if not _check_basic_auth(request):
-        return _UNAUTH
+        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="memorize"'})
     return await call_next(request)
 
 
