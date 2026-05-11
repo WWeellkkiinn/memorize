@@ -254,9 +254,13 @@ function setPhase(n) {
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 function prefetchNext() {
+  const forWord = state.word?.id;
   fetch('/api/peek').then(r => r.json()).then(data => {
-    state.next = data.word ? { ...data.word, intervals: data.intervals } : null;
-  }).catch(() => { state.next = null; });
+    // Ignore stale result: server hasn't advanced yet, returned current word
+    if (data.word && data.word.id !== forWord) {
+      state.next = { ...data.word, intervals: data.intervals };
+    }
+  }).catch(() => {});
 }
 
 async function fetchWord() {
@@ -312,13 +316,16 @@ async function submitRating(rating) {
     cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
       .then(() => { card.style.animation = ''; });
 
+    // Fire immediately: server may return stale current word, filtered by ID in prefetchNext
+    prefetchNext();
+
     fetch('/api/rate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ word_id: wordId, rating }),
     }).then(r => r.json()).then(data => {
       if (data.stats) { state.stats = data.stats; renderStats(); }
-      prefetchNext();
+      prefetchNext();  // server has advanced now, gets actual next-next word
     }).catch(() => {});
 
   } else {

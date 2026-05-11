@@ -57,7 +57,12 @@ class WordScheduler:
         """Pre-determine the next word without advancing state. Idempotent."""
         if self._peeked_id is None:
             self._peeked_id = self._preview_next()
-        return self._store.get_word(self._peeked_id) if self._peeked_id else None
+        if self._peeked_id is None:
+            return None
+        word = self._store.get_word(self._peeked_id)
+        if word is None:
+            self._peeked_id = None  # word was deleted, reset
+        return word
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
