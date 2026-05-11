@@ -61,8 +61,12 @@ function clearTimers() {
   state.revealTimer = null;
 }
 
-// 卡片高度平滑过渡：锁定当前高度 → 执行 DOM 更新 → 动画到新高度
+// 卡片高度平滑过渡：分帧写入确保浏览器有起始快照，支持取消上一轮动画
+let _animCancel = null;
+
 function animateCardHeight(callback) {
+  if (_animCancel) { _animCancel(); _animCancel = null; }
+
   const from = card.offsetHeight;
   card.style.height = from + 'px';
   card.style.overflow = 'hidden';
@@ -70,14 +74,42 @@ function animateCardHeight(callback) {
   card.style.height = 'auto';
   const to = card.offsetHeight;
   card.style.height = from + 'px';
-  void card.offsetHeight; // force reflow
-  card.style.transition = 'height 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
-  card.style.height = to + 'px';
-  card.addEventListener('transitionend', () => {
+  void card.offsetHeight;
+
+  const cleanup = () => {
     card.style.height = '';
     card.style.overflow = '';
     card.style.transition = '';
-  }, { once: true });
+    _animCancel = null;
+  };
+
+  if (from === to) { cleanup(); return; }
+
+  let rafId, timeoutId, listener;
+
+  _animCancel = () => {
+    cancelAnimationFrame(rafId);
+    clearTimeout(timeoutId);
+    card.removeEventListener('transitionend', listener);
+    cleanup();
+  };
+
+  // transition 和 height 分帧写入，保证浏览器能捕捉起始快照
+  rafId = requestAnimationFrame(() => {
+    card.style.transition = 'height 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+    card.style.height = to + 'px';
+    listener = (e) => {
+      if (e.propertyName !== 'height') return;
+      card.removeEventListener('transitionend', listener);
+      clearTimeout(timeoutId);
+      cleanup();
+    };
+    timeoutId = setTimeout(() => {
+      card.removeEventListener('transitionend', listener);
+      cleanup();
+    }, 500);
+    card.addEventListener('transitionend', listener);
+  });
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -161,11 +193,17 @@ function setPhase(n) {
     show(examples);
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
     show(ratingRow);
-    // 揭示 fade-in 动画
+    // 揭示 fade-in 动画：定义先出，例句中文错开跟上
     definition.classList.add('revealing');
-    examples.classList.add('revealing');
     definition.addEventListener('animationend', () => definition.classList.remove('revealing'), { once: true });
-    examples.addEventListener('animationend',   () => examples.classList.remove('revealing'),   { once: true });
+    examples.querySelectorAll('.example-zh').forEach((el, i) => {
+      el.style.animationDelay = (50 + i * 50) + 'ms';
+      el.classList.add('revealing');
+      el.addEventListener('animationend', () => {
+        el.classList.remove('revealing');
+        el.style.animationDelay = '';
+      }, { once: true });
+    });
   }
 }
 
@@ -228,7 +266,8 @@ card.addEventListener('click', () => {
 ratingRow.addEventListener('click', e => {
   e.stopPropagation();
   const btn = e.target.closest('[data-rating]');
-  if (!btn || state.phase !== 2 || !state.word) return;
+  if (!btn || btn.disabled || card.classList.contains('loading')) return;
+  if (state.phase !== 2 || !state.word) return;
   submitRating(parseInt(btn.dataset.rating, 10));
 });
 
