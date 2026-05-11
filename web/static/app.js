@@ -354,8 +354,6 @@ async function submitRating(rating) {
     cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
       .then(() => { card.style.animation = ''; });
 
-    prefetchNext();  // fires now; stale same-word result filtered by ID
-
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
         if (data.stats) { state.stats = data.stats; renderStats(); }

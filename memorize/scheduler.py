@@ -19,7 +19,7 @@ class WordScheduler:
         self._store = store
         self._queue: deque[int] = deque()
         self._current_id: int | None = None
-        self._peeked_id: int | None = None
+        self._peeked_word: dict | None = None  # cached to avoid extra DB read in _pick_next
         self._fill_queue()
 
     @property
@@ -48,26 +48,24 @@ class WordScheduler:
         self._store.rate(word_id, rating)
         if self._current_id == word_id:
             self._current_id = None
-        self._queue = deque(wid for wid in self._queue if wid != word_id)
-        # Only refill if queue is empty AND no peek is pre-determined
-        if not self._queue and self._peeked_id is None:
+        self._remove_from_queue(word_id)
+        if not self._queue and self._peeked_word is None:
             self._fill_queue()
 
     def peek_next(self) -> dict | None:
         """Pre-determine the next word without advancing state. Idempotent."""
-        if self._peeked_id is None:
-            self._peeked_id = self._preview_next()
-        if self._peeked_id is None:
-            return None
-        word = self._store.get_word(self._peeked_id)
-        if word is None:
-            self._peeked_id = None  # word was deleted, reset
-        return word
+        if self._peeked_word is None:
+            next_id = self._preview_next()
+            self._peeked_word = self._store.get_word(next_id) if next_id else None
+        return self._peeked_word
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
+    def _remove_from_queue(self, word_id: int) -> None:
+        self._queue = deque(wid for wid in self._queue if wid != word_id)
+
     def _preview_next(self) -> int | None:
-        """Non-destructive version of _pick_next: no popleft, no mark_introduced."""
+        """Non-destructive: peek at next word ID without side effects."""
         if self._queue:
             return self._queue[0]
         new_words = self._store.get_new_words(limit=1)
@@ -80,13 +78,12 @@ class WordScheduler:
         return None
 
     def _pick_next(self) -> int | None:
-        # Use pre-determined word if available
-        if self._peeked_id is not None:
-            word_id = self._peeked_id
-            self._peeked_id = None
-            self._queue = deque(wid for wid in self._queue if wid != word_id)
-            word = self._store.get_word(word_id)
-            if word and word.get("reps", 0) == 0:
+        if self._peeked_word is not None:
+            word = self._peeked_word
+            self._peeked_word = None
+            word_id = word["id"]
+            self._remove_from_queue(word_id)
+            if word.get("reps", 0) == 0:
                 self._store.mark_introduced(word_id)
             return word_id
 
@@ -105,8 +102,7 @@ class WordScheduler:
         candidates = self._store.get_lowest_stability_words(limit=10)
         candidates = [w for w in candidates if w["id"] != self._current_id]
         if candidates:
-            pick_from = candidates[: max(1, len(candidates) // 2)]
-            return random.choice(pick_from)["id"]
+            return random.choice(candidates[: max(1, len(candidates) // 2)])["id"]
 
         return None
 
