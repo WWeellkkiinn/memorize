@@ -21,16 +21,17 @@
       </div>
     </div>
 
-    <div id="hint-area" class="hidden">
-      <div id="hint-divider"></div>
-      <div id="hint-text">单击查看答案，3 秒后自动揭示</div>
+    <div id="answer-area">
+      <div id="hint-area" class="hidden">
+        <div id="hint-divider"></div>
+        <div id="hint-text">单击查看答案，3 秒后自动揭示</div>
+      </div>
+      <div id="reveal-divider" class="invisible"></div>
+      <div id="definition" class="invisible"></div>
     </div>
+    <div id="examples"></div>
 
-    <div id="reveal-divider" class="hidden"></div>
-    <div id="definition" class="hidden"></div>
-    <div id="examples" class="hidden"></div>
-
-    <div id="rating-row" class="hidden">
+    <div id="rating-row">
       <button class="rating-btn btn-again" data-rating="1">
         <span class="btn-label">忘了</span>
         <span class="interval" id="int-again"></span>

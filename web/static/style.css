@@ -102,9 +102,18 @@ body {
   opacity: 0.5;
 }
 
-/* ── Hint Area (Phase 1) ───────────────────────────────────────────────────── */
+/* ── Answer Area ───────────────────────────────────────────────────────────── */
+
+#answer-area {
+  position: relative;
+  min-height: 60px;
+}
+
+/* ── Hint Area (Phase 1, absolute overlay) ─────────────────────────────────── */
 
 #hint-area {
+  position: absolute;
+  top: 0; left: 0; right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -243,4 +252,5 @@ body {
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */
 
-.hidden { display: none; }
+.hidden    { display: none !important; }
+.invisible { visibility: hidden !important; pointer-events: none !important; }

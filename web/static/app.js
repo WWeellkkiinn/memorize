@@ -43,8 +43,10 @@ function formatInterval(days) {
   return (days / 365).toFixed(1) + '年';
 }
 
-function show(el) { el.classList.remove('hidden'); }
-function hide(el) { el.classList.add('hidden'); }
+function show(el)    { el.classList.remove('hidden'); el.classList.remove('invisible'); }
+function hide(el)    { el.classList.add('hidden'); }
+function visHide(el) { el.classList.add('invisible'); }
+function visShow(el) { el.classList.remove('invisible'); }
 
 function escHtml(s) {
   return String(s || '')
@@ -98,7 +100,7 @@ function renderWord() {
   examples.innerHTML = parsed.slice(0, 2).map(ex => `
     <div class="example-item">
       <div class="example-en">${escHtml(ex.en)}</div>
-      <div class="example-zh hidden">${escHtml(ex.zh)}</div>
+      <div class="example-zh invisible">${escHtml(ex.zh)}</div>
     </div>
   `).join('');
 
@@ -127,19 +129,18 @@ function setPhase(n) {
 
   if (n === 1) {
     show(hintArea);
-    hide(revealDivider);
-    hide(definition);
-    show(examples);   // 英文例句 Phase 1 可见，中文隐藏（由 renderWord 内联 hidden class 控制）
-    hide(ratingRow);
+    visHide(revealDivider);
+    visHide(definition);
+    show(examples);
+    show(ratingRow);
     renderWord();
     startCountdown();
   } else if (n === 2) {
     hide(hintArea);
-    show(revealDivider);
-    show(definition);
+    visShow(revealDivider);
+    visShow(definition);
     show(examples);
-    // 显示中文翻译
-    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('hidden'));
+    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
     show(ratingRow);
   }
 }
@@ -157,8 +158,10 @@ async function fetchWord() {
     if (!data.word) return;
     setPhase(1);
   } catch (e) {
+    state.phase = 0;
     hintText.textContent = '加载失败，请刷新页面';
     show(hintArea);
+    hide(ratingRow);
   }
 }
 
@@ -180,7 +183,9 @@ async function submitRating(rating) {
     setPhase(1);
   } catch (e) {
     hintText.textContent = '提交失败，请重试';
-    show(hintArea);
+    hide(hintArea);
+    visShow(revealDivider);
+    visShow(definition);
     show(ratingRow);
     state.phase = 2;
   } finally {
