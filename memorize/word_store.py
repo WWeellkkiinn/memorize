@@ -187,7 +187,7 @@ class WordStore:
         """Return words with reps=0 (never reviewed), ordered by frequency rank."""
         with self._conn() as conn:
             rows = conn.execute(
-                _WORD_COLS + "WHERE c.reps = 0 ORDER BY w.rank ASC LIMIT ?",
+                _WORD_COLS + "WHERE c.reps = 0 ORDER BY RANDOM() LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
