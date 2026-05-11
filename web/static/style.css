@@ -65,11 +65,18 @@ body {
     rgba(99, 102, 241, 0.025) 0%,
     transparent 60px
   );
-  transition: opacity 0.15s ease, transform 0.08s ease;
+  transition: opacity 0.2s ease, transform 0.08s ease;
 }
 
 #card:active  { transform: scale(0.998); }
-#card.loading { opacity: 0.45; pointer-events: none; }
+#card.loading { pointer-events: none; }
+
+@keyframes cardExit {
+  to { transform: scale(0.95); opacity: 0; }
+}
+@keyframes cardEnter {
+  from { transform: scale(0.95); opacity: 0; }
+}
 
 /* ── Card Header ───────────────────────────────────────────────────────────── */
 
@@ -269,9 +276,9 @@ body {
 /* ── Reduced motion ────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
-  .revealing           { animation: none; }
-  #card                { transition: none !important; }
-  .rating-btn          { transition: none; }
+  .revealing, #card { animation: none !important; }
+  #card             { transition: none !important; }
+  .rating-btn       { transition: none; }
 }
 
 /* ── Utility ───────────────────────────────────────────────────────────────── */

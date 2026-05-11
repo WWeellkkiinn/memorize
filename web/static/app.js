@@ -227,32 +227,61 @@ async function fetchWord() {
   }
 }
 
+function cardAnimate(name, duration, easing = 'ease') {
+  return new Promise(resolve => {
+    card.style.animation = `${name} ${duration}ms ${easing} forwards`;
+    const done = () => { clearTimeout(fallback); card.removeEventListener('animationend', onEnd); resolve(); };
+    const onEnd = e => { if (e.target === card && e.animationName === name) done(); };
+    const fallback = setTimeout(done, duration + 100);
+    card.addEventListener('animationend', onEnd);
+  });
+}
+
 async function submitRating(rating) {
   card.classList.add('loading');
   ratingRow.querySelectorAll('button').forEach(b => b.disabled = true);
   try {
-    const res  = await fetch('/api/rate', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ word_id: state.word.id, rating }),
-    });
+    // 退场动画与 API 并行
+    const [res] = await Promise.all([
+      fetch('/api/rate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ word_id: state.word.id, rating }),
+      }),
+      cardAnimate('cardExit', 150),
+    ]);
     if (!res.ok) throw new Error('rate failed: ' + res.status);
     const data = await res.json();
     state.word      = data.word;
     state.stats     = data.stats;
     state.intervals = data.intervals;
+    if (!data.word) {
+      card.style.animation = '';
+      card.classList.remove('loading');
+      ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
+      return;
+    }
+
+    // 换内容（此时卡片不可见）
+    card.style.animation = '';
     renderStats();
-    if (!data.word) return;
-    animateCardHeight(() => setPhase(1));
+    setPhase(1);
+
+    // 入场动画（spring 弹入）
+    card.classList.remove('loading');
+    ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
+    await cardAnimate('cardEnter', 280, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
+    card.style.animation = '';
+
   } catch (e) {
+    card.style.animation = '';
+    card.classList.remove('loading');
     hintText.textContent = '提交失败，请重试';
     hide(hintArea);
     visShow(revealDivider);
     visShow(definition);
     show(ratingRow);
     state.phase = 2;
-  } finally {
-    card.classList.remove('loading');
     ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
   }
 }
