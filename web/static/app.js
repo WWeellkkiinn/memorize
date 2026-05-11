@@ -53,6 +53,47 @@ function escHtml(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+const _isCVC = s => {
+  if (s.length < 3) return false;
+  const [a, b, c] = [s[s.length-3], s[s.length-2], s[s.length-1]];
+  return /[bcdfghjklmnpqrstvwxyz]/i.test(a)
+    && /[aeiou]/i.test(b)
+    && /[bcdfghjklmnpqrstvwxyz]/i.test(c)
+    && !/[wxy]/i.test(c);
+};
+
+function regularForms(baseWord) {
+  const w = String(baseWord || '').trim().toLowerCase();
+  if (!/^[a-z]+$/.test(w) || w.length < 2) return [w].filter(Boolean);
+  const consonantY = /[^aeiou]y$/.test(w);
+  const cvc        = _isCVC(w);
+  const forms = new Set([w]);
+  if (/[sxz]$|[cs]h$/.test(w)) forms.add(w + 'es');
+  else if (consonantY)          forms.add(w.slice(0, -1) + 'ies');
+  else                          forms.add(w + 's');
+  if (consonantY)               forms.add(w.slice(0, -1) + 'ied');
+  else if (/e$/.test(w))        forms.add(w + 'd');
+  else if (cvc)                 { forms.add(w + w[w.length-1] + 'ed'); forms.add(w + 'ed'); }
+  else                          forms.add(w + 'ed');
+  if (/ie$/.test(w))            forms.add(w.slice(0, -2) + 'ying');
+  else if (/e$/.test(w) && !/(ee|ye|oe)$/.test(w)) forms.add(w.slice(0, -1) + 'ing');
+  else if (cvc)                 { forms.add(w + w[w.length-1] + 'ing'); forms.add(w + 'ing'); }
+  else                          forms.add(w + 'ing');
+  return [...forms].sort((a, b) => b.length - a.length);
+}
+
+function buildWordRegex(baseWord) {
+  const forms = regularForms(baseWord);
+  if (!forms.length) return null;
+  const escaped = forms.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(^|[^A-Za-z])(${escaped.join('|')})(?=$|[^A-Za-z])`, 'gi');
+}
+
+function highlightWordHtml(sentence, re) {
+  if (!re) return escHtml(sentence);
+  return escHtml(sentence).replace(re, (_, pre, hit) => `${pre}<mark class="word-hit">${hit}</mark>`);
+}
+
 function clearTimers() {
   clearInterval(state.countdownTimer);
   clearTimeout(state.revealTimer);
@@ -147,9 +188,10 @@ function renderWord() {
 
   let parsed = [];
   try { parsed = JSON.parse(w.examples || '[]'); } catch (_) {}
+  const wordRe = buildWordRegex(w.word);
   examples.innerHTML = parsed.slice(0, 2).map(ex => `
     <div class="example-item">
-      <div class="example-en">${escHtml(ex.en)}</div>
+      <div class="example-en">${highlightWordHtml(ex.en, wordRe)}</div>
       <div class="example-zh invisible">${escHtml(ex.zh)}</div>
     </div>
   `).join('');

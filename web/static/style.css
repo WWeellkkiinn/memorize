@@ -141,14 +141,11 @@ body {
   justify-content: center;
 }
 
-
-
 #hint-text {
   font-size: 16px;
   color: var(--text-muted);
   text-align: center;
 }
-
 
 /* ── Definition ────────────────────────────────────────────────────────────── */
 
@@ -181,6 +178,13 @@ body {
   font-size: 17px;
   color: var(--text);
   line-height: 1.6;
+}
+
+.word-hit {
+  background: rgba(255, 214, 102, 0.45);
+  border-radius: 4px;
+  padding: 0.02em 0.22em 0.08em;
+  color: inherit;
 }
 
 .example-zh {
