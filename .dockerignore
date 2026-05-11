@@ -1,0 +1,6 @@
+memorize-db/
+data/
+__pycache__/
+*.pyc
+.git/
+.claude/

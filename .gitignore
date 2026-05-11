@@ -7,6 +7,9 @@ build/
 *.spec
 .python-path
 data/cet6.json
+data/ielts*.json
+data/ielts*.txt
 data/words.txt
 data/*.md
 CLAUDE.md
+memorize-db/

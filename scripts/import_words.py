@@ -23,12 +23,16 @@ _CET6_JSON = _DATA_DIR / "cet6.json"
 
 
 def _build_index(cet6_path: Path) -> dict[str, dict]:
-    """Build a lowercase headWord → entry dict from kajweb/dict CET6 JSON."""
-    raw = json.loads(cet6_path.read_text(encoding="utf-8"))
-    # kajweb/dict structure: list of entries, each has "headWord", "content" with nested data
+    """Build a lowercase headWord → entry dict from kajweb/dict JSON or JSONL."""
+    text = cet6_path.read_text(encoding="utf-8").strip()
     index: dict[str, dict] = {}
 
-    entries = raw if isinstance(raw, list) else raw.get("words", [])
+    # Try JSON array first, fall back to JSONL (one object per line)
+    if text.startswith('[') or text.startswith('{') and '\n{' not in text:
+        raw = json.loads(text)
+        entries = raw if isinstance(raw, list) else raw.get("words", [])
+    else:
+        entries = [json.loads(line) for line in text.splitlines() if line.strip()]
     for entry in entries:
         # Support both flat and nested kajweb/dict formats
         word = (entry.get("headWord") or entry.get("word") or "").strip().lower()
