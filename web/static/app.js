@@ -32,6 +32,7 @@ const examples      = $('examples');
 const ratingRow     = $('rating-row');
 const statStage     = $('stat-stage');
 const statCounts    = $('stat-counts');
+const toast         = $('toast');
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,43 @@ function buildWordRegex(baseWord) {
 function highlightWordHtml(sentence, re) {
   if (!re) return escHtml(sentence);
   return escHtml(sentence).replace(re, (_, pre, hit) => `${pre}<mark class="word-hit">${hit}</mark>`);
+}
+
+function showToast(msg, onRetry = null) {
+  toast.textContent = msg;
+  if (onRetry) {
+    const btn = document.createElement('button');
+    btn.textContent = '重试';
+    btn.onclick = () => { hideToast(); onRetry(); };
+    toast.appendChild(btn);
+  }
+  toast.classList.remove('hidden');
+}
+
+function hideToast() {
+  toast.classList.add('hidden');
+}
+
+async function submitWithRetry(wordId, rating, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) showToast(`网络异常，正在重试 (${attempt}/${maxRetries - 1})…`);
+    try {
+      const res = await fetch('/api/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word_id: wordId, rating }),
+      });
+      if (!res.ok) throw new Error('status ' + res.status);
+      hideToast();
+      return await res.json();
+    } catch (e) {
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      } else {
+        throw e;
+      }
+    }
+  }
 }
 
 function clearTimers() {
@@ -316,31 +354,24 @@ async function submitRating(rating) {
     cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
       .then(() => { card.style.animation = ''; });
 
-    // Fire immediately: server may return stale current word, filtered by ID in prefetchNext
-    prefetchNext();
+    prefetchNext();  // fires now; stale same-word result filtered by ID
 
-    fetch('/api/rate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ word_id: wordId, rating }),
-    }).then(r => r.json()).then(data => {
-      if (data.stats) { state.stats = data.stats; renderStats(); }
-      prefetchNext();  // server has advanced now, gets actual next-next word
-    }).catch(() => {});
+    const doSubmit = (wid, r) => submitWithRetry(wid, r)
+      .then(data => {
+        if (data.stats) { state.stats = data.stats; renderStats(); }
+        prefetchNext();  // server has advanced, gets actual next-next word
+      })
+      .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
+
+    doSubmit(wordId, rating);
 
   } else {
     // Fallback: wait for API (no prefetch ready)
     try {
-      const [res] = await Promise.all([
-        fetch('/api/rate', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ word_id: wordId, rating }),
-        }),
+      const [data] = await Promise.all([
+        submitWithRetry(wordId, rating),
         cardAnimate('cardExit', 80),
       ]);
-      if (!res.ok) throw new Error('rate failed: ' + res.status);
-      const data = await res.json();
       state.word      = data.word;
       state.stats     = data.stats;
       state.intervals = data.intervals;
@@ -353,11 +384,7 @@ async function submitRating(rating) {
       prefetchNext();
     } catch (e) {
       reset();
-      hintText.textContent = '提交失败，请重试';
-      hide(hintArea);
-      visShow(definition);
-      show(ratingRow);
-      state.phase = 2;
+      showToast('提交失败，请检查网络', () => submitRating(rating));
     }
   }
 }

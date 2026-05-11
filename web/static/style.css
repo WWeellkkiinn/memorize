@@ -262,6 +262,36 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+
+#toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(239, 68, 68, 0.92);
+  color: #fff;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 100;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+#toast button {
+  background: rgba(255,255,255,0.25);
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
 /* ── Animations ────────────────────────────────────────────────────────────── */
 
 @keyframes fadeReveal {
