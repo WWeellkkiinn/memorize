@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#F3F4F8">
+  <title>Memorize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="stats-bar">
+    <span id="stat-new" class="stat-pill">新词 —</span>
+    <span id="stat-review" class="stat-pill">复习 —</span>
+  </div>
+
+  <div id="card">
+    <div id="card-header">
+      <span id="stage-badge"></span>
+      <span id="word-pos"></span>
+      <span id="word-text"></span>
+      <span id="word-phonetic"></span>
+    </div>
+
+    <div id="hint-area" class="hidden">
+      <div id="hint-divider"></div>
+      <div id="hint-countdown"></div>
+      <div id="hint-label">点击立即查看</div>
+    </div>
+
+    <div id="reveal-divider" class="hidden"></div>
+    <div id="definition" class="hidden"></div>
+    <div id="examples" class="hidden"></div>
+
+    <div id="rating-row" class="hidden">
+      <button class="rating-btn btn-again" data-rating="1">
+        <span class="btn-label">忘了</span>
+        <span class="interval" id="int-again"></span>
+      </button>
+      <button class="rating-btn btn-hard" data-rating="2">
+        <span class="btn-label">模糊</span>
+        <span class="interval" id="int-hard"></span>
+      </button>
+      <button class="rating-btn btn-good" data-rating="3">
+        <span class="btn-label">记得</span>
+        <span class="interval" id="int-good"></span>
+      </button>
+      <button class="rating-btn btn-easy" data-rating="4">
+        <span class="btn-label">轻松</span>
+        <span class="interval" id="int-easy"></span>
+      </button>
+    </div>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
