@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS words (
     phonetic    TEXT NOT NULL DEFAULT '',
     pos         TEXT NOT NULL DEFAULT '',
     definition  TEXT NOT NULL DEFAULT '',
-    examples    TEXT NOT NULL DEFAULT '[]'
+    examples    TEXT NOT NULL DEFAULT '[]',
+    rank        INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -118,6 +119,10 @@ class WordStore:
             card_cols = {r[1] for r in conn.execute("PRAGMA table_info(cards)")}
             if "last_seen_at" not in card_cols:
                 conn.execute("ALTER TABLE cards ADD COLUMN last_seen_at TEXT DEFAULT NULL")
+            # Migration: words.rank
+            word_cols = {r[1] for r in conn.execute("PRAGMA table_info(words)")}
+            if "rank" not in word_cols:
+                conn.execute("ALTER TABLE words ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
             conn.commit()
 
     # ── Insert ────────────────────────────────────────────────────────────────
@@ -129,14 +134,15 @@ class WordStore:
         pos: str = "",
         definition: str = "",
         examples: list[dict] | None = None,
+        rank: int = 0,
     ) -> int | None:
         """Insert a word; return its id, or None if it already exists."""
         ex_json = json.dumps(examples or [], ensure_ascii=False)
         with self._conn() as conn:
             cur = conn.execute(
-                "INSERT OR IGNORE INTO words(word, phonetic, pos, definition, examples)"
-                " VALUES(?,?,?,?,?)",
-                (word.lower(), phonetic, pos, definition, ex_json),
+                "INSERT OR IGNORE INTO words(word, phonetic, pos, definition, examples, rank)"
+                " VALUES(?,?,?,?,?,?)",
+                (word.lower(), phonetic, pos, definition, ex_json, rank),
             )
             conn.commit()
             if cur.lastrowid and cur.rowcount:
@@ -178,10 +184,10 @@ class WordStore:
         return dict(row) if row else None
 
     def get_new_words(self, limit: int = 5) -> list[dict]:
-        """Return words with reps=0 (never reviewed), for new-word introduction."""
+        """Return words with reps=0 (never reviewed), ordered by frequency rank."""
         with self._conn() as conn:
             rows = conn.execute(
-                _WORD_COLS + "WHERE c.reps = 0 ORDER BY w.id ASC LIMIT ?",
+                _WORD_COLS + "WHERE c.reps = 0 ORDER BY w.rank ASC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]

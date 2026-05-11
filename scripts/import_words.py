@@ -39,6 +39,7 @@ def _build_index(cet6_path: Path) -> dict[str, dict]:
         if not word:
             continue
         index[word] = entry
+        index[word]["_rank"] = entry.get("wordRank") or 0
     return index
 
 
@@ -82,6 +83,7 @@ def _extract(entry: dict) -> dict:
         "pos": pos,
         "definition": definition,
         "examples": examples,
+        "rank": entry.get("_rank") or entry.get("wordRank") or 0,
     }
 
 
@@ -124,6 +126,7 @@ def run(words_txt: Path) -> None:
             pos=data["pos"],
             definition=data["definition"],
             examples=data["examples"],
+            rank=data.get("rank", 0),
         )
         if word_id is not None:
             store.init_card(word_id)
