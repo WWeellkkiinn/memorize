@@ -168,8 +168,8 @@ body {
 }
 
 .example-item {
-  background: rgba(0, 0, 0, 0.025);
-  border: 1px solid var(--border);
+  background: rgba(14, 165, 233, 0.07);
+  border: 1px solid rgba(14, 165, 233, 0.22);
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -193,7 +193,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 12px;
 }
 
 .rating-btn {
@@ -203,13 +203,13 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  padding: 14px 6px;
+  padding: 9px 6px;
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   color: var(--text);
   cursor: pointer;
-  min-height: 52px;
+  min-height: 30px;
   touch-action: manipulation;
   transition: transform 0.1s ease;
 }
@@ -230,10 +230,10 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
-  padding-top: 14px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 16px;
   color: var(--text-muted);
 }
 
