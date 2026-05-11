@@ -26,7 +26,6 @@ const wordText      = $('word-text');
 const wordPhone     = $('word-phonetic');
 const hintArea      = $('hint-area');
 const hintText      = $('hint-text');
-const revealDivider = $('reveal-divider');
 const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
@@ -180,7 +179,6 @@ function setPhase(n) {
 
   if (n === 1) {
     show(hintArea);
-    visHide(revealDivider);
     visHide(definition);
     show(examples);
     show(ratingRow);
@@ -188,7 +186,6 @@ function setPhase(n) {
     startCountdown();
   } else if (n === 2) {
     hide(hintArea);
-    visShow(revealDivider);
     visShow(definition);
     show(examples);
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
@@ -263,9 +260,9 @@ async function submitRating(rating) {
     }
 
     // 换内容（此时卡片不可见）
-    card.style.animation = '';
     renderStats();
     setPhase(1);
+    card.style.animation = '';
 
     // 入场动画（spring 弹入）
     card.classList.remove('loading');
@@ -278,7 +275,6 @@ async function submitRating(rating) {
     card.classList.remove('loading');
     hintText.textContent = '提交失败，请重试';
     hide(hintArea);
-    visShow(revealDivider);
     visShow(definition);
     show(ratingRow);
     state.phase = 2;
