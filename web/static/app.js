@@ -13,6 +13,7 @@ const state = {
   word: null,
   stats: null,
   intervals: null,
+  next: null,       // pre-fetched next word
   countdownSec: 3,
   countdownTimer: null,
   revealTimer: null,
@@ -252,6 +253,12 @@ function setPhase(n) {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+function prefetchNext() {
+  fetch('/api/peek').then(r => r.json()).then(data => {
+    state.next = data.word ? { ...data.word, intervals: data.intervals } : null;
+  }).catch(() => { state.next = null; });
+}
+
 async function fetchWord() {
   try {
     const res  = await fetch('/api/word');
@@ -262,6 +269,7 @@ async function fetchWord() {
     renderStats();
     if (!data.word) return;
     setPhase(1);
+    prefetchNext();
   } catch (e) {
     state.phase = 0;
     hintText.textContent = '加载失败，请刷新页面';
@@ -281,6 +289,7 @@ function cardAnimate(name, duration, easing = 'ease') {
 }
 
 async function submitRating(rating) {
+  const wordId = state.word.id;
   const btns = ratingRow.querySelectorAll('button');
   card.classList.add('loading');
   btns.forEach(b => b.disabled = true);
@@ -291,35 +300,58 @@ async function submitRating(rating) {
     btns.forEach(b => b.disabled = false);
   }
 
-  try {
-    const [res] = await Promise.all([
-      fetch('/api/rate', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ word_id: state.word.id, rating }),
-      }),
-      cardAnimate('cardExit', 80),
-    ]);
-    if (!res.ok) throw new Error('rate failed: ' + res.status);
-    const data = await res.json();
-    state.word      = data.word;
-    state.stats     = data.stats;
-    state.intervals = data.intervals;
-    if (!data.word) { reset(); return; }
-
+  if (state.next) {
+    // Optimistic path: show next word immediately, submit rating in background
+    await cardAnimate('cardExit', 80);
+    state.word      = state.next;
+    state.intervals = state.next.intervals || null;
+    state.next      = null;
     renderStats();
     setPhase(1);
     reset();
-    await cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
-    card.style.animation = '';
+    cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
+      .then(() => { card.style.animation = ''; });
 
-  } catch (e) {
-    reset();
-    hintText.textContent = '提交失败，请重试';
-    hide(hintArea);
-    visShow(definition);
-    show(ratingRow);
-    state.phase = 2;
+    fetch('/api/rate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ word_id: wordId, rating }),
+    }).then(r => r.json()).then(data => {
+      if (data.stats) { state.stats = data.stats; renderStats(); }
+      prefetchNext();
+    }).catch(() => {});
+
+  } else {
+    // Fallback: wait for API (no prefetch ready)
+    try {
+      const [res] = await Promise.all([
+        fetch('/api/rate', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ word_id: wordId, rating }),
+        }),
+        cardAnimate('cardExit', 80),
+      ]);
+      if (!res.ok) throw new Error('rate failed: ' + res.status);
+      const data = await res.json();
+      state.word      = data.word;
+      state.stats     = data.stats;
+      state.intervals = data.intervals;
+      if (!data.word) { reset(); return; }
+      renderStats();
+      setPhase(1);
+      reset();
+      await cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
+      card.style.animation = '';
+      prefetchNext();
+    } catch (e) {
+      reset();
+      hintText.textContent = '提交失败，请重试';
+      hide(hintArea);
+      visShow(definition);
+      show(ratingRow);
+      state.phase = 2;
+    }
   }
 }
 

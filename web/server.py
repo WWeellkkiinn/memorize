@@ -95,6 +95,18 @@ def get_word():
     return _build_response(app.state.scheduler, app.state.store)
 
 
+@app.get("/api/peek")
+def peek_word():
+    word = app.state.scheduler.peek_next()
+    if word:
+        word = dict(word)
+        word["stage"] = _compute_stage(word)
+        intervals = app.state.store.get_preview_intervals(word["id"])
+    else:
+        intervals = None
+    return {"word": word, "intervals": intervals}
+
+
 class RateRequest(BaseModel):
     word_id: int
     rating: int = Field(ge=1, le=4)
