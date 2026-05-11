@@ -287,7 +287,7 @@ async function submitRating(rating) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ word_id: state.word.id, rating }),
       }),
-      cardAnimate('cardExit', 150),
+      cardAnimate('cardExit', 80),
     ]);
     if (!res.ok) throw new Error('rate failed: ' + res.status);
     const data = await res.json();
@@ -309,7 +309,7 @@ async function submitRating(rating) {
     // 入场动画（spring 弹入）
     card.classList.remove('loading');
     ratingRow.querySelectorAll('button').forEach(b => b.disabled = false);
-    await cardAnimate('cardEnter', 280, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
+    await cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
     card.style.animation = '';
 
   } catch (e) {
