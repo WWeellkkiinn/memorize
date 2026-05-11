@@ -20,6 +20,9 @@ _security = HTTPBasic()
 _AUTH_USER = os.environ.get("AUTH_USER", "")
 _AUTH_PASS = os.environ.get("AUTH_PASS", "")
 
+if not _AUTH_USER or not _AUTH_PASS:
+    raise RuntimeError("AUTH_USER and AUTH_PASS environment variables must be set")
+
 
 def _require_auth(credentials: HTTPBasicCredentials = Depends(_security)):
     ok = (

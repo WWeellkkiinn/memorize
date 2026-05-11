@@ -6,7 +6,5 @@ services:
     volumes:
       - .:/app
       - ./memorize-db:/data/memorize
-    environment:
-      - AUTH_USER=your_username
-      - AUTH_PASS=your_password
+    env_file: .env
     restart: unless-stopped

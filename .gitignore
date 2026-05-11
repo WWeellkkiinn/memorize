@@ -13,3 +13,4 @@ data/words.txt
 data/*.md
 CLAUDE.md
 memorize-db/
+.env
