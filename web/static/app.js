@@ -21,19 +21,17 @@ const state = {
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const card          = $('card');
-const stageBadge    = $('stage-badge');
 const wordPos       = $('word-pos');
 const wordText      = $('word-text');
 const wordPhone     = $('word-phonetic');
 const hintArea      = $('hint-area');
-const hintCountdown = $('hint-countdown');
-const hintLabel     = $('hint-label');
+const hintText      = $('hint-text');
 const revealDivider = $('reveal-divider');
 const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
-const statNew       = $('stat-new');
-const statReview    = $('stat-review');
+const statStage     = $('stat-stage');
+const statCounts    = $('stat-counts');
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -64,10 +62,16 @@ function clearTimers() {
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function renderStats() {
-  if (!state.stats) return;
+  const w = state.word;
   const s = state.stats;
-  statNew.textContent    = `新词 ${s.newWords}`;
-  statReview.textContent = `复习 ${s.reviewedWords}`;
+  if (w) {
+    statStage.textContent  = w.stage || '';
+    statStage.style.color  = STAGE_COLORS[w.stage] || 'var(--text-muted)';
+  }
+  if (s) {
+    const total = s.newTotal + s.reviewedTotal;
+    statCounts.textContent = `共${total}次 | 新词${s.newWords} | 复习${s.reviewedWords}`;
+  }
 }
 
 function renderIntervals() {
@@ -83,20 +87,18 @@ function renderWord() {
   const w = state.word;
   if (!w) return;
 
-  stageBadge.textContent  = w.stage;
-  stageBadge.style.color  = STAGE_COLORS[w.stage] || 'var(--text)';
-  wordPos.textContent     = w.pos || '';
-  wordText.textContent    = w.word || '';
-  wordPhone.textContent   = w.phonetic ? `/${w.phonetic}/` : '';
+  wordPos.textContent    = w.pos || '';
+  wordText.textContent   = w.word || '';
+  wordPhone.textContent  = w.phonetic ? `/${w.phonetic}/` : '';
 
-  definition.textContent  = w.definition || '';
+  definition.textContent = w.definition || '';
 
   let parsed = [];
   try { parsed = JSON.parse(w.examples || '[]'); } catch (_) {}
   examples.innerHTML = parsed.slice(0, 2).map(ex => `
     <div class="example-item">
       <div class="example-en">${escHtml(ex.en)}</div>
-      <div class="example-zh">${escHtml(ex.zh)}</div>
+      <div class="example-zh hidden">${escHtml(ex.zh)}</div>
     </div>
   `).join('');
 
@@ -104,7 +106,7 @@ function renderWord() {
 }
 
 function updateCountdownText() {
-  hintCountdown.textContent = state.countdownSec;
+  hintText.textContent = `单击查看答案，${state.countdownSec} 秒后自动揭示`;
 }
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ function setPhase(n) {
     show(hintArea);
     hide(revealDivider);
     hide(definition);
-    hide(examples);
+    show(examples);   // 英文例句 Phase 1 可见，中文隐藏（由 renderWord 内联 hidden class 控制）
     hide(ratingRow);
     renderWord();
     startCountdown();
@@ -136,10 +138,11 @@ function setPhase(n) {
     show(revealDivider);
     show(definition);
     show(examples);
+    // 显示中文翻译
+    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('hidden'));
     show(ratingRow);
   }
 }
-
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
@@ -154,8 +157,7 @@ async function fetchWord() {
     if (!data.word) return;
     setPhase(1);
   } catch (e) {
-    hintCountdown.textContent = '!';
-    hintLabel.textContent = '加载失败，请刷新页面';
+    hintText.textContent = '加载失败，请刷新页面';
     show(hintArea);
   }
 }
@@ -177,8 +179,7 @@ async function submitRating(rating) {
     if (!data.word) return;
     setPhase(1);
   } catch (e) {
-    hintCountdown.textContent = '!';
-    hintLabel.textContent = '提交失败，请重试';
+    hintText.textContent = '提交失败，请重试';
     show(hintArea);
     show(ratingRow);
     state.phase = 2;

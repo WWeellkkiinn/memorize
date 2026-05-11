@@ -12,23 +12,18 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div id="stats-bar">
-    <span id="stat-new" class="stat-pill">新词 —</span>
-    <span id="stat-review" class="stat-pill">复习 —</span>
-  </div>
-
   <div id="card">
     <div id="card-header">
-      <span id="stage-badge"></span>
-      <span id="word-pos"></span>
       <span id="word-text"></span>
-      <span id="word-phonetic"></span>
+      <div id="word-meta">
+        <span id="word-pos"></span>
+        <span id="word-phonetic"></span>
+      </div>
     </div>
 
     <div id="hint-area" class="hidden">
       <div id="hint-divider"></div>
-      <div id="hint-countdown"></div>
-      <div id="hint-label">点击立即查看</div>
+      <div id="hint-text">单击查看答案，3 秒后自动揭示</div>
     </div>
 
     <div id="reveal-divider" class="hidden"></div>
@@ -54,6 +49,10 @@
       </button>
     </div>
 
+    <div id="stats-row">
+      <span id="stat-stage"></span>
+      <span id="stat-counts"></span>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>
