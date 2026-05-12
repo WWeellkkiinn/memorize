@@ -60,7 +60,8 @@ def _build_response(scheduler: WordScheduler, store: WordStore) -> dict:
         intervals = store.get_preview_intervals(word["id"])
     else:
         intervals = None
-    return {"word": word, "stats": stats, "intervals": intervals}
+    progress = {"introduced": store.introduced_words(), "total": store.total_words()}
+    return {"word": word, "stats": stats, "intervals": intervals, "progress": progress}
 
 
 @asynccontextmanager

@@ -12,6 +12,7 @@ const state = {
   phase: 0,         // 0=loading, 1=self-test, 2=revealed
   word: null,
   stats: null,
+  progress: null,
   intervals: null,
   next: null,       // pre-fetched next word
   countdownSec: 3,
@@ -31,6 +32,7 @@ const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
 const statStage     = $('stat-stage');
+const statProgress  = $('stat-progress');
 const statCounts    = $('stat-counts');
 const toast         = $('toast');
 
@@ -205,9 +207,13 @@ function animateCardHeight(callback) {
 function renderStats() {
   const w = state.word;
   const s = state.stats;
+  const p = state.progress;
   if (w) {
     statStage.textContent = w.stage || '';
     statStage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
+  }
+  if (p) {
+    statProgress.textContent = `${p.introduced} / ${p.total} 词`;
   }
   if (s) {
     const total = s.newTotal + s.reviewedTotal;
@@ -310,6 +316,7 @@ async function fetchWord() {
     const data = await res.json();
     state.word      = data.word;
     state.stats     = data.stats;
+    state.progress  = data.progress;
     state.intervals = data.intervals;
     renderStats();
     if (!data.word) return;
@@ -359,7 +366,7 @@ async function submitRating(rating) {
 
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
-        if (data.stats) { state.stats = data.stats; renderStats(); }
+        if (data.stats) { state.stats = data.stats; state.progress = data.progress; renderStats(); }
         prefetchNext();  // server has advanced, gets actual next-next word
       })
       .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
@@ -375,6 +382,7 @@ async function submitRating(rating) {
       ]);
       state.word      = data.word;
       state.stats     = data.stats;
+      state.progress  = data.progress;
       state.intervals = data.intervals;
       if (!data.word) { reset(); return; }
       renderStats();
