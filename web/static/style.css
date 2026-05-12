@@ -308,14 +308,6 @@ body {
   animation: fadeReveal 0.28s ease-out both;
 }
 
-/* ── Mobile layout ─────────────────────────────────────────────────────────── */
-
-@media (max-width: 480px) {
-  body    { padding: 20px 8px 32px; }
-  #card   { padding: 20px 16px 16px; }
-  #word-text { font-size: 34px; }
-}
-
 /* ── Reduced motion ────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
