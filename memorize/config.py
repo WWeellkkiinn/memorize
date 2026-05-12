@@ -12,6 +12,18 @@ def _appdata_dir() -> Path:
     return Path(base) / "memorize"
 
 
+def _load_dotenv() -> None:
+    env_path = Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        os.environ.setdefault(key.strip(), val.strip())
+
+
 CONFIG_PATH = _appdata_dir() / "config.json"
 DB_PATH = _appdata_dir() / "words.db"
 LOG_PATH = _appdata_dir() / "memorize.log"
@@ -30,6 +42,7 @@ class Config:
 
 
 def load_config() -> Config:
+    _load_dotenv()
     if not CONFIG_PATH.exists():
         return Config()
     try:
@@ -50,8 +63,8 @@ def load_config() -> Config:
             )),
             mode=str(data.get("mode", defaults.mode)),
             server_url=str(data.get("server_url", defaults.server_url)),
-            server_user=str(data.get("server_user", defaults.server_user)),
-            server_pass=str(data.get("server_pass", defaults.server_pass)),
+            server_user=os.environ.get("MEMORIZE_SERVER_USER") or str(data.get("server_user", "")),
+            server_pass=os.environ.get("MEMORIZE_SERVER_PASS") or str(data.get("server_pass", "")),
         )
     except (TypeError, ValueError):
         logging.warning("config.json has invalid values, using defaults")
@@ -60,6 +73,9 @@ def load_config() -> Config:
 
 def save_config(config: Config) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    data = asdict(config)
+    data.pop("server_user", None)
+    data.pop("server_pass", None)
     tmp = CONFIG_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(asdict(config), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(CONFIG_PATH)
