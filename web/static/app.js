@@ -486,6 +486,9 @@ async function _commitSwipe() {
 
   if (data && data.word) {
     // Set inline positions before cancel so element snaps to these values
+    // Lock height before cancel so flex container doesn't reflow mid-swap
+    card.style.minHeight = card.offsetHeight + 'px';
+
     card.style.transform = '';
     cardPrev.style.transform = `translateX(${-W}px)`;
     exitAnim.cancel();
@@ -501,6 +504,11 @@ async function _commitSwipe() {
     renderStats();
     setPhase(1);
     renderPrevCard(null);
+
+    // Release height lock after two frames (new content painted)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      card.style.minHeight = '';
+    }));
   } else {
     exitAnim.cancel(); enterAnim.cancel();
     resetCardPositions(); renderPrevCard(state.prevHTML);
