@@ -14,10 +14,11 @@ DB_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "memorize" /
 
 def extract_parts(tree: list) -> list[dict]:
     parts = []
-    for node in tree:
+    for node in (tree or []):
+        if not node or not isinstance(node, dict):
+            continue
         if "text" in node:
-            t = node.get("type", "root")
-            parts.append({"text": node["text"], "type": t})
+            parts.append({"text": node["text"], "type": node.get("type", "root")})
         if "children" in node:
             parts.extend(extract_parts(node["children"]))
     return parts
