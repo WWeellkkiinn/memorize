@@ -38,6 +38,7 @@ const hintText      = $('hint-text');
 const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
+const ratingBtns    = Array.from(ratingRow.querySelectorAll('button')); // cached once
 const statStage     = $('stat-stage');
 const statProgress  = $('stat-progress');
 const statCounts    = $('stat-counts');
@@ -129,11 +130,17 @@ function hideToast() {
   toast.classList.add('hidden');
 }
 
+function fetchTimeout(url, options = {}, ms = 10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...options, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function submitWithRetry(wordId, rating, maxRetries = 3) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) showToast(`网络异常，正在重试 (${attempt}/${maxRetries - 1})…`);
     try {
-      const res = await fetch('/api/rate', {
+      const res = await fetchTimeout('/api/rate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word_id: wordId, rating }),
@@ -352,22 +359,22 @@ function renderPrevCard(html) {
     cardPrev.innerHTML = '';
     return;
   }
+  const offScreen = prevOffScreen(); // read layout BEFORE DOM write to avoid forced reflow
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
-  cardPrev.style.transform = prevOffScreen(); // always reset to correct off-screen position
+  cardPrev.style.transform = offScreen;
 }
 
 async function submitRating(rating) {
   if (state.animating) return;
   state.animating = true;
   const wordId = state.word.id;
-  const btns = ratingRow.querySelectorAll('button');
   card.classList.add('loading');
-  btns.forEach(b => b.disabled = true);
+  ratingBtns.forEach(b => b.disabled = true);
 
   const unlock = () => {
     card.classList.remove('loading');
-    btns.forEach(b => b.disabled = false);
+    ratingBtns.forEach(b => b.disabled = false);
     state.animating = false;
     if (_pendingUndo && state.phase === 2) { _pendingUndo = false; _commitSwipe(); }
   };
@@ -385,7 +392,7 @@ async function submitRating(rating) {
     setPhase(1);
     renderPrevCard(state.prevHTML);
     card.classList.remove('loading');
-    btns.forEach(b => b.disabled = false);
+    ratingBtns.forEach(b => b.disabled = false);
     const enterDone = cardEnter(KF_ENTER_RIGHT, 240, exitAnim).then(unlock);
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
@@ -415,7 +422,7 @@ async function submitRating(rating) {
       setPhase(1);
       renderPrevCard(state.prevHTML);
       card.classList.remove('loading');
-      btns.forEach(b => b.disabled = false);
+      ratingBtns.forEach(b => b.disabled = false);
       await cardEnter(KF_ENTER_RIGHT, 240, exitAnim);
       unlock();
       prefetchNext();
@@ -433,6 +440,7 @@ async function submitRating(rating) {
 
 const UNDO_THRESHOLD = 80;
 let _sx = 0, _sy = 0, _swipeDir = null;
+let _cachedCardW = 0; // cached in touchstart to avoid per-frame layout reads
 let _pendingUndo = false;
 
 function _curCardDx() {
@@ -442,8 +450,9 @@ function _curCardDx() {
 
 function _snapAllBack() {
   const curDx = _curCardDx();
-  if (curDx === 0) return;
-  const W = getCardW();
+  // No early return: curDx may be 0 due to cleared inline style while WAAPI runs elsewhere.
+  // Animating from translateX(0)→none is a no-op visually but safely resets state.
+  const W = _cachedCardW || getCardW();
   const opts = { duration: 220, easing: ENTER_EASING };
   card.style.transform = '';
   card.animate([{ transform: `translateX(${curDx}px)` }, { transform: 'none' }], opts);
@@ -462,16 +471,15 @@ async function _commitSwipe() {
   if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
 
-  const W = getCardW();
+  // Batch all layout reads before any writes to avoid forced reflow
+  const W = _cachedCardW || getCardW();
   const curDx = _curCardDx();
+  const prevH = cardPrev.scrollHeight; // read before any style writes
 
-  // Pin stage height to prev card's height RIGHT NOW (same frame as animation start).
-  // flex re-centers to the correct final position before the first paint,
-  // so the animation plays with the stage already at its correct height.
-  cardStage.style.height = cardPrev.scrollHeight + 'px';
+  // Pin stage height (same frame as animation start — flex re-centers before first paint)
+  if (prevH > 0) cardStage.style.height = prevH + 'px';
 
-  card.style.transform = '';
-  cardPrev.style.transform = '';
+  // Don't clear inline transforms — WAAPI first keyframes override them without flash risk
 
   const exitAnim = card.animate(
     [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)`, opacity: 0.4 }],
@@ -486,7 +494,11 @@ async function _commitSwipe() {
   let data;
   try {
     [data] = await Promise.all([
-      fetch('/api/undo', { method: 'POST' }).then(r => r.json()),
+      fetchTimeout('/api/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }).then(r => r.json()),
       exitAnim.finished,
       enterAnim.finished,
     ]);
@@ -529,6 +541,7 @@ card.addEventListener('touchstart', e => {
   _sx = e.touches[0].clientX;
   _sy = e.touches[0].clientY;
   _swipeDir = null;
+  _cachedCardW = card.offsetWidth + CARD_GAP; // cache once — avoids per-frame layout reads
 }, { passive: true });
 
 card.addEventListener('touchmove', e => {
@@ -541,7 +554,7 @@ card.addEventListener('touchmove', e => {
   }
   if (_swipeDir !== 'h' || dx <= 0) return;
 
-  const W = getCardW();
+  const W = _cachedCardW; // set in touchstart — no per-frame layout read
   let travel;
   if (state.prev) {
     travel = dx <= UNDO_THRESHOLD ? dx : UNDO_THRESHOLD + (dx - UNDO_THRESHOLD) * 0.25;

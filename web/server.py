@@ -113,6 +113,10 @@ class RateRequest(BaseModel):
     rating: int = Field(ge=1, le=4)
 
 
+class EmptyRequest(BaseModel):
+    pass
+
+
 @app.post("/api/rate")
 def rate_word(body: RateRequest):
     app.state.scheduler.rate(body.word_id, Rating(body.rating))
@@ -120,7 +124,7 @@ def rate_word(body: RateRequest):
 
 
 @app.post("/api/undo")
-def undo_word():
+def undo_word(body: EmptyRequest):
     word = app.state.scheduler.undo_last_rating()
     if not word:
         return {"word": None, "stats": None, "intervals": None, "progress": None}
