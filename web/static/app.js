@@ -211,6 +211,7 @@ function buildMorphemeHTML(word) {
 function buildExamplesHTML(word) {
   let parsed = [];
   try { parsed = JSON.parse(word.examples || '[]'); } catch (_) {}
+  if (!Array.isArray(parsed)) parsed = [];
   const wordRe = buildWordRegex(word.word);
   return parsed.slice(0, 2).map(ex =>
     `<div class="example-item">` +
@@ -247,7 +248,7 @@ function startCountdown() {
   state.revealTimer = setTimeout(() => setPhase(2), 3000);
 }
 
-function setPhase(n) {
+function setPhase(n, skipReveal = false) {
   clearTimers();
   state.phase = n;
 
@@ -257,9 +258,9 @@ function setPhase(n) {
     show(examples);
     ratingRow.classList.remove('revealing');
     definition.classList.remove('revealing');
-    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('revealing'));
     visHide(ratingRow);
-    renderWord();
+    renderWord(); // replaces examples.innerHTML — querySelectorAll after to hit new nodes
+    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('revealing'));
     startCountdown();
   } else if (n === 2) {
     hide(hintArea);
@@ -268,13 +269,15 @@ function setPhase(n) {
     const zhEls = examples.querySelectorAll('.example-zh');
     zhEls.forEach(el => el.classList.remove('invisible'));
     visShow(ratingRow);
-    reveal(ratingRow);
-    reveal(definition);
-    zhEls.forEach((el, i) => {
-      el.style.animationDelay = (50 + i * 50) + 'ms';
-      el.addEventListener('animationend', () => { el.style.animationDelay = ''; }, { once: true });
-      reveal(el);
-    });
+    if (!skipReveal) {
+      reveal(ratingRow);
+      reveal(definition);
+      zhEls.forEach((el, i) => {
+        el.style.animationDelay = (50 + i * 50) + 'ms';
+        el.addEventListener('animationend', () => { el.style.animationDelay = ''; }, { once: true });
+        reveal(el);
+      });
+    }
   }
 }
 
@@ -393,7 +396,7 @@ async function submitRating(rating) {
     card.classList.remove('loading');
     ratingBtns.forEach(b => b.disabled = false);
     state.animating = false;
-    if (_pendingUndo && state.phase === 2) { _pendingUndo = false; _commitSwipe(); }
+    if (_pendingUndo && state.prev) { _pendingUndo = false; _commitSwipe(); }
   };
 
   if (state.next) {
@@ -461,7 +464,10 @@ async function submitRating(rating) {
       if (!data.word) {
         card.style.transform = '';
         card.getAnimations().forEach(a => a.cancel());
-        unlock();
+        card.classList.remove('loading');
+        _pendingUndo = false;
+        state.animating = false;
+        showToast('没有更多单词了');
         return;
       }
 
@@ -491,6 +497,7 @@ async function submitRating(rating) {
     } catch (e) {
       card.style.transform = '';
       card.getAnimations().forEach(a => a.cancel());
+      _pendingUndo = false;
       unlock();
       showToast('提交失败，请检查网络', () => submitRating(rating));
     }
@@ -534,7 +541,6 @@ function _snapAllBack() {
 }
 
 async function _commitSwipe() {
-  if (state.phase !== 2) return;
   if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
 
@@ -576,6 +582,7 @@ async function _commitSwipe() {
     cardStage.style.height = '';
     resetCardPositions();
     if (state.prevHTML) renderPrevCard(state.prevHTML); // guard: null after consecutive undos
+    _pendingUndo = false;
     state.animating = false;
     return;
   }
@@ -590,6 +597,7 @@ async function _commitSwipe() {
     // Update pin to prevH before setPhase(1) so the content-height change doesn't flex-reflow
     if (prevH > 0) cardStage.style.height = prevH + 'px';
 
+    _pendingUndo    = false;
     state.prev      = null;
     state.prevHTML  = null;
     state.word      = data.word;
@@ -598,7 +606,8 @@ async function _commitSwipe() {
     state.intervals = data.intervals;
     state.next      = null;
     renderStats();
-    setPhase(1);          // card renders at prevH — stage already pinned to prevH, no reflow
+    renderWord();
+    setPhase(2, true);
     renderPrevCard(null);
     cardStage.style.height = ''; // release: card height = prevH = stage height → no jump
   } else {
@@ -618,7 +627,7 @@ card.addEventListener('touchstart', e => {
 }, { passive: true });
 
 card.addEventListener('touchmove', e => {
-  if (state.phase !== 2) return;
+  if (state.phase < 1 || !state.word) return;
   const dx = e.touches[0].clientX - _sx;
   const dy = e.touches[0].clientY - _sy;
   const adx = Math.abs(dx), ady = Math.abs(dy);
@@ -651,12 +660,13 @@ card.addEventListener('touchend', e => {
 
 card.addEventListener('touchcancel', () => {
   _swipeDir = null;
-  _snapAllBack();
+  if (!state.animating) _snapAllBack();
 }, { passive: true });
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 
 card.addEventListener('click', () => {
+  if (state.animating) return;
   if (state.phase === 1) setPhase(2);
 });
 
