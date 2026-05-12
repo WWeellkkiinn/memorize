@@ -266,7 +266,7 @@ function setPhase(n) {
     show(hintArea);
     visHide(definition);
     show(examples);
-    show(ratingRow);
+    hide(ratingRow);
     renderWord();
     startCountdown();
   } else if (n === 2) {
@@ -275,6 +275,8 @@ function setPhase(n) {
     show(examples);
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
     show(ratingRow);
+    ratingRow.classList.add('revealing');
+    ratingRow.addEventListener('animationend', () => ratingRow.classList.remove('revealing'), { once: true });
     // 揭示 fade-in 动画：定义先出，例句中文错开跟上
     definition.classList.add('revealing');
     definition.addEventListener('animationend', () => definition.classList.remove('revealing'), { once: true });
