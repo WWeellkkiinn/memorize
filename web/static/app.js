@@ -266,7 +266,7 @@ function setPhase(n) {
     show(hintArea);
     visHide(definition);
     show(examples);
-    hide(ratingRow);
+    visHide(ratingRow);
     renderWord();
     startCountdown();
   } else if (n === 2) {
