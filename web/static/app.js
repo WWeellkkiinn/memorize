@@ -421,14 +421,15 @@ async function submitRating(rating) {
     renderPrevCard(buildNextCardHTML(nextWord), 'right');
     const W = getCardW();
 
-    // Both cards slide LEFT together (same rail)
+    // Both cards slide LEFT together on the same rail — identical easing keeps them locked
+    const RAIL_EASING = 'ease-in-out';
     const exitAnim = card.animate(
       [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
-      { duration: SLIDE_DUR, easing: EXIT_EASING, fill: 'forwards' }
+      { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
     );
     const enterAnim = cardPrev.animate(
       [{ transform: `translateX(${W}px) translateY(-50%)` }, { transform: 'translateX(0) translateY(-50%)' }],
-      { duration: SLIDE_DUR, easing: ENTER_EASING, fill: 'forwards' }
+      { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
     );
 
     // Submit in background while animating
