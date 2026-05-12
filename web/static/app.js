@@ -31,7 +31,6 @@ const hintText      = $('hint-text');
 const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
-const wordMorphemes = $('word-morphemes');
 const statStage     = $('stat-stage');
 const statProgress  = $('stat-progress');
 const statCounts    = $('stat-counts');
@@ -185,17 +184,16 @@ function renderWord() {
   if (!w) return;
 
   wordPos.textContent   = w.pos || '';
-  wordText.textContent  = w.word || '';
   wordPhone.textContent = w.phonetic ? `/${w.phonetic}/` : '';
 
   if (w.morphemes) {
     const parts = w.morphemes.split('|').map(p => {
       const [text, type] = p.split(':');
-      return `<span class="morpheme morpheme-${type}">${escHtml(text)}</span>`;
+      return `<span class="morpheme-${type}">${escHtml(text)}</span>`;
     });
-    wordMorphemes.innerHTML = parts.join('<span class="morpheme-sep">·</span>');
+    wordText.innerHTML = parts.join('<span class="morpheme-sep">·</span>');
   } else {
-    wordMorphemes.innerHTML = '';
+    wordText.textContent = w.word || '';
   }
 
   definition.textContent = w.definition || '';
