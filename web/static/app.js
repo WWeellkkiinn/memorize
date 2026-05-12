@@ -110,6 +110,7 @@ function buildWordRegex(baseWord) {
   return re;
 }
 
+// sentence MUST be pre-escaped with escHtml; hit is a substring of the escaped string, safe to embed
 function highlightWordHtml(sentence, re) {
   if (!re) return escHtml(sentence);
   return escHtml(sentence).replace(re, (_, pre, hit) => `${pre}<mark class="word-hit">${hit}</mark>`);
@@ -193,38 +194,40 @@ function renderIntervals() {
   $('int-easy').textContent  = formatInterval(iv.easy);
 }
 
-function renderWord() {
-  const w = state.word;
-  if (!w) return;
-
-  wordPos.textContent   = w.pos || '';
-  wordPhone.textContent = w.phonetic ? `/${w.phonetic}/` : '';
-
-  if (w.morphemes) {
-    const parts = w.morphemes.split('|').map(p => {
+function buildMorphemeHTML(word) {
+  if (word.morphemes) {
+    const parts = word.morphemes.split('|').map(p => {
       const idx = p.indexOf(':');
       const text = idx >= 0 ? p.slice(0, idx) : p;
       const type = idx >= 0 ? p.slice(idx + 1) : 'root';
       const safeType = MORPHEME_TYPES.has(type) ? type : 'root';
       return `<span class="morpheme-${safeType}">${escHtml(text)}</span>`;
     });
-    wordText.innerHTML = parts.join('<span class="morpheme-sep">·</span>');
-  } else {
-    wordText.textContent = w.word || '';
+    return parts.join('<span class="morpheme-sep">·</span>');
   }
+  return escHtml(word.word || '');
+}
 
-  definition.textContent = w.definition || '';
-
+function buildExamplesHTML(word) {
   let parsed = [];
-  try { parsed = JSON.parse(w.examples || '[]'); } catch (_) {}
-  const wordRe = buildWordRegex(w.word);
-  examples.innerHTML = parsed.slice(0, 2).map(ex => `
-    <div class="example-item">
-      <div class="example-en">${highlightWordHtml(ex.en, wordRe)}</div>
-      <div class="example-zh invisible">${escHtml(ex.zh)}</div>
-    </div>
-  `).join('');
+  try { parsed = JSON.parse(word.examples || '[]'); } catch (_) {}
+  const wordRe = buildWordRegex(word.word);
+  return parsed.slice(0, 2).map(ex =>
+    `<div class="example-item">` +
+    `<div class="example-en">${highlightWordHtml(ex.en, wordRe)}</div>` +
+    `<div class="example-zh invisible">${escHtml(ex.zh)}</div>` +
+    `</div>`
+  ).join('');
+}
 
+function renderWord() {
+  const w = state.word;
+  if (!w) return;
+  wordPos.textContent    = w.pos || '';
+  wordPhone.textContent  = w.phonetic ? `/${w.phonetic}/` : '';
+  wordText.innerHTML     = buildMorphemeHTML(w);
+  definition.textContent = w.definition || '';
+  examples.innerHTML     = buildExamplesHTML(w);
   renderIntervals();
 }
 
@@ -313,36 +316,16 @@ async function fetchWord() {
 
 const EXIT_EASING  = 'cubic-bezier(0.4, 0, 1, 1)';
 const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+const RAIL_EASING  = 'ease-in-out';
 
-// Build phase-1 HTML for a word — used to pre-render next/prev card in #card-prev
+// Build phase-1 HTML for #card-prev. IDs are intentionally duplicated from #card —
+// CSS selectors apply equally (desired), and JS always uses startup-cached refs inside #card.
 function buildNextCardHTML(word) {
   if (!word) return '';
-  let wordHTML;
-  if (word.morphemes) {
-    const parts = word.morphemes.split('|').map(p => {
-      const idx = p.indexOf(':');
-      const text = idx >= 0 ? p.slice(0, idx) : p;
-      const type = idx >= 0 ? p.slice(idx + 1) : 'root';
-      const safeType = MORPHEME_TYPES.has(type) ? type : 'root';
-      return `<span class="morpheme-${safeType}">${escHtml(text)}</span>`;
-    });
-    wordHTML = parts.join('<span class="morpheme-sep">·</span>');
-  } else {
-    wordHTML = escHtml(word.word || '');
-  }
-  let parsed = [];
-  try { parsed = JSON.parse(word.examples || '[]'); } catch (_) {}
-  const wordRe = buildWordRegex(word.word);
-  const examplesHTML = parsed.slice(0, 2).map(ex =>
-    `<div class="example-item">` +
-    `<div class="example-en">${highlightWordHtml(ex.en, wordRe)}</div>` +
-    `<div class="example-zh invisible">${escHtml(ex.zh)}</div>` +
-    `</div>`
-  ).join('');
   const stageColor = STAGE_COLORS[word.stage] || 'var(--text-muted)';
   return (
     `<div id="card-header">` +
-    `<span id="word-text">${wordHTML}</span>` +
+    `<span id="word-text">${buildMorphemeHTML(word)}</span>` +
     `<div id="word-meta">` +
     `<span id="word-pos">${escHtml(word.pos || '')}</span>` +
     `<span id="word-phonetic">${word.phonetic ? '/' + escHtml(word.phonetic) + '/' : ''}</span>` +
@@ -351,7 +334,7 @@ function buildNextCardHTML(word) {
     `<div id="hint-area"><div id="hint-text">单击查看答案</div></div>` +
     `<div id="definition" class="invisible">${escHtml(word.definition || '')}</div>` +
     `</div>` +
-    `<div id="examples">${examplesHTML}</div>` +
+    `<div id="examples">${buildExamplesHTML(word)}</div>` +
     `<div id="rating-row" class="invisible">` +
     `<button class="rating-btn btn-again"><span class="btn-label">忘 了</span><span class="interval"></span></button>` +
     `<button class="rating-btn btn-hard"><span class="btn-label">模 糊</span><span class="interval"></span></button>` +
@@ -400,6 +383,7 @@ async function submitRating(rating) {
   if (state.animating) return;
   state.animating = true;
   const wordId = state.word.id;
+  const gen = ++_submitGen; // generation token — stale doSubmit retries check this
   card.classList.add('loading');
   ratingBtns.forEach(b => b.disabled = true);
 
@@ -422,7 +406,6 @@ async function submitRating(rating) {
     const W = getCardW();
 
     // Both cards slide LEFT together on the same rail — identical easing keeps them locked
-    const RAIL_EASING = 'ease-in-out';
     const exitAnim = card.animate(
       [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
       { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
@@ -432,13 +415,17 @@ async function submitRating(rating) {
       { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
     );
 
-    // Submit in background while animating
+    // Submit in background while animating; gen check prevents stale retries and state overwrites
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
+        if (gen !== _submitGen) return; // newer rating submitted — discard stale response
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
         prefetchNext();
       })
-      .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
+      .catch(() => {
+        if (gen !== _submitGen) return; // newer rating submitted — stop retrying silently
+        showToast('提交失败，请检查网络', () => doSubmit(wid, r));
+      });
     doSubmit(wordId, rating);
 
     await Promise.all([exitAnim.finished, enterAnim.finished]);
@@ -492,10 +479,8 @@ async function submitRating(rating) {
       renderStats();
       setPhase(1);
       renderPrevCard(state.prevHTML, 'left');
-      card.classList.remove('loading');
-      ratingBtns.forEach(b => b.disabled = false);
 
-      // Enter from right (single card)
+      // Enter from right (single card) — buttons stay locked until animation completes
       await card.animate(
         [{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }],
         { duration: SLIDE_DUR, easing: ENTER_EASING }
@@ -521,6 +506,7 @@ const UNDO_THRESHOLD = 80;
 let _sx = 0, _sy = 0, _swipeDir = null;
 let _cachedCardW = 0; // cached in touchstart to avoid per-frame layout reads
 let _pendingUndo = false;
+let _submitGen = 0;   // incremented each submitRating call; stale doSubmit retries check this
 
 function _curCardDx() {
   const m = card.style.transform && card.style.transform.match(/translateX\((-?[\d.]+)px\)/);
@@ -531,17 +517,19 @@ function _snapAllBack() {
   const curDx = _curCardDx();
   // No early return: curDx may be 0 due to cleared inline style while WAAPI runs elsewhere.
   // Animating from translateX(0)→none is a no-op visually but safely resets state.
-  const W = _cachedCardW || getCardW();
   const opts = { duration: 220, easing: ENTER_EASING };
   card.style.transform = '';
   card.animate([{ transform: `translateX(${curDx}px)` }, { transform: 'none' }], opts);
   if (state.prev) {
-    const offScreen = prevOffScreen();
+    const W = _cachedCardW || getCardW();
+    const offScreen = `translateX(${-W}px) translateY(-50%)`;
     cardPrev.style.transform = offScreen;
     cardPrev.animate(
       [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` }, { transform: offScreen }],
       opts
     );
+  } else {
+    cardPrev.getAnimations().forEach(a => a.cancel()); // clear any stale fill:forwards
   }
 }
 
@@ -562,7 +550,6 @@ async function _commitSwipe() {
 
   // Don't clear inline transforms — WAAPI first keyframes override them without flash risk
 
-  const RAIL_EASING = 'ease-in-out';
   const exitAnim = card.animate(
     [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)` }],
     { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
@@ -587,7 +574,8 @@ async function _commitSwipe() {
   } catch {
     exitAnim.cancel(); enterAnim.cancel();
     cardStage.style.height = '';
-    resetCardPositions(); renderPrevCard(state.prevHTML);
+    resetCardPositions();
+    if (state.prevHTML) renderPrevCard(state.prevHTML); // guard: null after consecutive undos
     state.animating = false;
     return;
   }
