@@ -26,8 +26,9 @@ def extract_parts(tree: list) -> list[dict]:
 
 def main():
     mrp = Morphemes()
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=60)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 60000")
 
     words = conn.execute("SELECT id, word FROM words").fetchall()
     updated = skipped = 0
