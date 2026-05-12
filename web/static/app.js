@@ -186,10 +186,14 @@ function renderWord() {
   wordPos.textContent   = w.pos || '';
   wordPhone.textContent = w.phonetic ? `/${w.phonetic}/` : '';
 
+  const MORPHEME_TYPES = new Set(['prefix', 'root', 'bound', 'free']);
   if (w.morphemes) {
     const parts = w.morphemes.split('|').map(p => {
-      const [text, type] = p.split(':');
-      return `<span class="morpheme-${type}">${escHtml(text)}</span>`;
+      const idx = p.indexOf(':');
+      const text = idx >= 0 ? p.slice(0, idx) : p;
+      const type = idx >= 0 ? p.slice(idx + 1) : 'root';
+      const safeType = MORPHEME_TYPES.has(type) ? type : 'root';
+      return `<span class="morpheme-${safeType}">${escHtml(text)}</span>`;
     });
     wordText.innerHTML = parts.join('<span class="morpheme-sep">·</span>');
   } else {
@@ -236,6 +240,8 @@ function setPhase(n) {
     visHide(definition);
     show(examples);
     ratingRow.classList.remove('revealing');
+    definition.classList.remove('revealing');
+    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('revealing'));
     visHide(ratingRow);
     renderWord();
     startCountdown();
