@@ -13,6 +13,7 @@ const STAGE_COLORS = {
 const state = {
   phase: 0,         // 0=loading, 1=self-test, 2=revealed
   word: null,
+  prev: null,       // previous word (for right-swipe undo preview)
   stats: null,
   progress: null,
   intervals: null,
@@ -20,12 +21,12 @@ const state = {
   countdownSec: 3,
   countdownTimer: null,
   revealTimer: null,
-  animating: false, // prevents double-submit during transitions
+  animating: false,
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const undoHint      = $('undo-hint');
+const cardPrev      = $('card-prev');
 const card          = $('card');
 const wordPos       = $('word-pos');
 const wordText      = $('word-text');
@@ -288,6 +289,8 @@ async function fetchWord() {
     renderStats();
     if (!data.word) return;
     setPhase(1);
+    renderPrevCard(null);
+    resetCardPositions();
     prefetchNext();
   } catch (e) {
     state.phase = 0;
@@ -325,6 +328,29 @@ async function cardEnter(keyframes, duration, exitAnim) {
   await anim.finished;
 }
 
+// ── Parallel card track helpers ───────────────────────────────────────────────
+
+const CARD_GAP = 16;
+
+function getCardW() { return card.offsetWidth + CARD_GAP; }
+
+function resetCardPositions() {
+  card.getAnimations().forEach(a => a.cancel());
+  cardPrev.getAnimations().forEach(a => a.cancel());
+  card.style.transform = '';
+  cardPrev.style.transform = `translateX(${-getCardW()}px)`;
+}
+
+function renderPrevCard(word) {
+  if (!word) {
+    cardPrev.style.visibility = 'hidden';
+    return;
+  }
+  cardPrev.style.visibility = '';
+  cardPrev.querySelector('.prev-word').textContent = word.word || '';
+  cardPrev.querySelector('.prev-def').textContent = word.definition || '';
+}
+
 async function submitRating(rating) {
   if (state.animating) return;
   state.animating = true;
@@ -337,22 +363,22 @@ async function submitRating(rating) {
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
     state.animating = false;
-    if (_pendingUndo && state.phase === 2) { _pendingUndo = false; submitUndo(); }
+    if (_pendingUndo && state.phase === 2) { _pendingUndo = false; _commitSwipe(); }
   };
 
   if (state.next) {
     // Optimistic: show next word immediately, submit in background
     const exitAnim = await cardExit(KF_EXIT_LEFT, 160);
+    state.prev      = state.word;                      // save for right-swipe undo
     state.word      = state.next;
     state.intervals = state.next.intervals || null;
     state.next      = null;
     renderStats();
     setPhase(1);
+    renderPrevCard(state.prev);
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
-    // Keep animating=true during enter, then unlock
     const enterDone = cardEnter(KF_ENTER_RIGHT, 240, exitAnim).then(unlock);
-    // Submit in background (don't block enter)
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
@@ -369,6 +395,7 @@ async function submitRating(rating) {
         submitWithRetry(wordId, rating),
         cardExit(KF_EXIT_LEFT, 160),
       ]);
+      state.prev      = state.word;                    // save for right-swipe undo
       state.word      = data.word;
       state.stats     = data.stats;
       state.progress  = data.progress;
@@ -376,6 +403,7 @@ async function submitRating(rating) {
       if (!data.word) { unlock(); return; }
       renderStats();
       setPhase(1);
+      renderPrevCard(state.prev);
       card.classList.remove('loading');
       btns.forEach(b => b.disabled = false);
       await cardEnter(KF_ENTER_RIGHT, 240, exitAnim);
@@ -388,118 +416,94 @@ async function submitRating(rating) {
   }
 }
 
-// ── Swipe-right to undo ───────────────────────────────────────────────────────
+// ── Parallel card track — right-swipe to undo ─────────────────────────────────
+// #card-prev lives at translateX(-getCardW()) off-screen left.
+// During right swipe, both cards move by the same dx: they look strung together.
+// On commit: current exits right, prev enters center; then content + positions reset.
 
 const UNDO_THRESHOLD = 80;
 let _sx = 0, _sy = 0, _swipeDir = null;
-let _pendingUndo = false; // committed swipe during animation → run undo after unlock
+let _pendingUndo = false;
 
-// Called by submitRating's unlock when pendingUndo is set
-async function submitUndo() {
-  if (state.animating || state.phase !== 2) return;
-  state.animating = true;
-  card.classList.add('loading');
-  try {
-    const res = await fetch('/api/undo', { method: 'POST' });
-    const data = await res.json();
-    if (!data.word) {
-      card.classList.remove('loading');
-      state.animating = false;
-      return;
-    }
-    const exitAnim = await cardExit(KF_EXIT_RIGHT, 200);
-    _applyUndoData(data);
-    card.classList.remove('loading');
-    await cardEnter(KF_ENTER_LEFT, 240, exitAnim);
-    state.animating = false;
-    prefetchNext();
-  } catch (e) {
-    cancelCardAnims();
-    card.classList.remove('loading');
-    state.animating = false;
+function _curCardDx() {
+  const m = card.style.transform && card.style.transform.match(/translateX\((-?[\d.]+)px\)/);
+  return m ? parseFloat(m[1]) : 0;
+}
+
+function _snapAllBack() {
+  const curDx = _curCardDx();
+  if (curDx === 0) return;
+  const W = getCardW();
+  const opts = { duration: 220, easing: ENTER_EASING };
+  card.style.transform = '';
+  card.animate([{ transform: `translateX(${curDx}px)` }, { transform: 'none' }], opts);
+  if (state.prev) {
+    cardPrev.style.transform = `translateX(${-W}px)`;
+    cardPrev.animate(
+      [{ transform: `translateX(${-W + curDx}px)` }, { transform: `translateX(${-W}px)` }],
+      opts
+    );
   }
 }
 
-// Commit swipe: card is already at `capturedDx` pixels to the right.
-// Continue exit from that position while fetching undo in parallel.
-async function _commitSwipe(capturedDx, capturedOpacity) {
+async function _commitSwipe() {
   if (state.phase !== 2) return;
-  if (state.animating) {
-    // Animation in flight — queue and snap back visually
-    _pendingUndo = true;
-    card.animate(
-      [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
-       { transform: 'none', opacity: '1' }],
-      { duration: 220, easing: ENTER_EASING }
-    );
-    return;
-  }
+  if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
-  card.classList.add('loading');
 
-  // Exit continues from finger position (feels seamless)
+  const W = getCardW();
+  const curDx = _curCardDx();
+  card.style.transform = '';
+  cardPrev.style.transform = '';
+
   const exitAnim = card.animate(
-    [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
-     { transform: 'translateX(110vw)', opacity: 0 }],
-    { duration: 200, easing: EXIT_EASING, fill: 'forwards' }
+    [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)`, opacity: 0.4 }],
+    { duration: 240, easing: EXIT_EASING, fill: 'forwards' }
+  );
+  const enterAnim = cardPrev.animate(
+    [{ transform: `translateX(${-W + curDx}px)` }, { transform: 'translateX(0)' }],
+    { duration: 240, easing: ENTER_EASING, fill: 'forwards' }
   );
 
+  let data;
   try {
-    const [data] = await Promise.all([
+    [data] = await Promise.all([
       fetch('/api/undo', { method: 'POST' }).then(r => r.json()),
       exitAnim.finished,
+      enterAnim.finished,
     ]);
-    if (!data.word) {
-      // Nothing to undo — snap back
-      exitAnim.cancel();
-      card.animate(
-        [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
-         { transform: 'none', opacity: '1' }],
-        { duration: 220, easing: ENTER_EASING }
-      );
-      card.classList.remove('loading');
-      state.animating = false;
-      return;
-    }
-    exitAnim.cancel(); // remove forwards fill
-    cancelCardAnims();
-    _applyUndoData(data);
-    card.classList.remove('loading');
-    await cardEnter(KF_ENTER_LEFT, 240);
+  } catch {
+    exitAnim.cancel(); enterAnim.cancel();
+    resetCardPositions(); renderPrevCard(state.prev);
     state.animating = false;
-    prefetchNext();
-  } catch (e) {
+    return;
+  }
+
+  if (data && data.word) {
+    // Set inline positions before cancel so element snaps to these values
+    card.style.transform = '';
+    cardPrev.style.transform = `translateX(${-W}px)`;
     exitAnim.cancel();
-    cancelCardAnims();
-    card.classList.remove('loading');
-    state.animating = false;
-  }
-}
+    enterAnim.cancel();
 
-function _applyUndoData(data) {
-  state.word      = data.word;
-  state.stats     = data.stats;
-  state.progress  = data.progress;
-  state.intervals = data.intervals;
-  state.next      = null;
-  renderStats();
-  setPhase(1);
-}
-
-function _swipeSnapBack(fromDx, fromOpacity) {
-  card.style.transform = '';
-  card.style.opacity = '';
-  if (fromDx > 2) {
-    card.animate(
-      [{ transform: `translateX(${fromDx}px)`, opacity: String(fromOpacity) },
-       { transform: 'none', opacity: '1' }],
-      { duration: 220, easing: ENTER_EASING }
-    );
+    state.prev      = null;
+    state.word      = data.word;
+    state.stats     = data.stats;
+    state.progress  = data.progress;
+    state.intervals = data.intervals;
+    state.next      = null;
+    renderStats();
+    setPhase(1);
+    renderPrevCard(null);
+  } else {
+    exitAnim.cancel(); enterAnim.cancel();
+    resetCardPositions(); renderPrevCard(state.prev);
   }
+  state.animating = false;
+  prefetchNext();
 }
 
 card.addEventListener('touchstart', e => {
-  // Allow gesture start even during animation (req 2)
   _sx = e.touches[0].clientX;
   _sy = e.touches[0].clientY;
   _swipeDir = null;
@@ -510,46 +514,36 @@ card.addEventListener('touchmove', e => {
   const dx = e.touches[0].clientX - _sx;
   const dy = e.touches[0].clientY - _sy;
   const adx = Math.abs(dx), ady = Math.abs(dy);
-
   if (_swipeDir === null && (adx > 6 || ady > 6)) {
     _swipeDir = adx > ady ? 'h' : 'v';
   }
   if (_swipeDir !== 'h' || dx <= 0) return;
 
-  // 1:1 follow with rubber-band past threshold
-  const travel = dx <= UNDO_THRESHOLD
-    ? dx
-    : UNDO_THRESHOLD + (dx - UNDO_THRESHOLD) * 0.25;
+  const W = getCardW();
+  let travel;
+  if (state.prev) {
+    travel = dx <= UNDO_THRESHOLD ? dx : UNDO_THRESHOLD + (dx - UNDO_THRESHOLD) * 0.25;
+    cardPrev.style.transform = `translateX(${-W + travel}px)`;
+  } else {
+    travel = Math.min(dx * 0.12, 18); // heavy resistance at boundary
+  }
   card.style.transform = `translateX(${travel}px)`;
-  card.style.opacity = String(Math.max(0.35, 1 - dx / (UNDO_THRESHOLD * 2)));
-  undoHint.style.opacity = String(Math.min(1, dx / UNDO_THRESHOLD));
 }, { passive: true });
 
 card.addEventListener('touchend', e => {
-  undoHint.style.opacity = '0';
   if (_swipeDir !== 'h') { _swipeDir = null; return; }
   const dx = e.changedTouches[0].clientX - _sx;
-  const curDx = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
-  const curOp = parseFloat(card.style.opacity) || 1;
-  card.style.transform = '';
-  card.style.opacity = '';
   _swipeDir = null;
-
-  if (dx > UNDO_THRESHOLD) {
-    _commitSwipe(curDx, curOp);
+  if (dx > UNDO_THRESHOLD && state.prev) {
+    _commitSwipe();
   } else {
-    _swipeSnapBack(curDx, curOp);
+    _snapAllBack();
   }
 }, { passive: true });
 
 card.addEventListener('touchcancel', () => {
-  const curDx = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
-  const curOp = parseFloat(card.style.opacity) || 1;
-  card.style.transform = '';
-  card.style.opacity = '';
-  undoHint.style.opacity = '0';
   _swipeDir = null;
-  _swipeSnapBack(curDx, curOp);
+  _snapAllBack();
 }, { passive: true });
 
 // ── Event listeners ───────────────────────────────────────────────────────────
