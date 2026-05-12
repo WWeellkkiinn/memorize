@@ -27,6 +27,7 @@ const state = {
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+const cardStage     = $('card-stage');
 const cardPrev      = $('card-prev');
 const card          = $('card');
 const wordPos       = $('word-pos');
@@ -458,6 +459,12 @@ async function _commitSwipe() {
 
   const W = getCardW();
   const curDx = _curCardDx();
+
+  // Pin stage height to prev card's height RIGHT NOW (same frame as animation start).
+  // flex re-centers to the correct final position before the first paint,
+  // so the animation plays with the stage already at its correct height.
+  cardStage.style.height = cardPrev.scrollHeight + 'px';
+
   card.style.transform = '';
   cardPrev.style.transform = '';
 
@@ -479,6 +486,7 @@ async function _commitSwipe() {
     ]);
   } catch {
     exitAnim.cancel(); enterAnim.cancel();
+    cardStage.style.height = '';
     resetCardPositions(); renderPrevCard(state.prevHTML);
     state.animating = false;
     return;
@@ -486,9 +494,6 @@ async function _commitSwipe() {
 
   if (data && data.word) {
     // Set inline positions before cancel so element snaps to these values
-    // Lock height before cancel so flex container doesn't reflow mid-swap
-    card.style.minHeight = card.offsetHeight + 'px';
-
     card.style.transform = '';
     cardPrev.style.transform = `translateX(${-W}px)`;
     exitAnim.cancel();
@@ -502,15 +507,12 @@ async function _commitSwipe() {
     state.intervals = data.intervals;
     state.next      = null;
     renderStats();
-    setPhase(1);
+    setPhase(1);          // same word as prevHTML → height ≈ pinned height
     renderPrevCard(null);
-
-    // Release height lock after two frames (new content painted)
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      card.style.minHeight = '';
-    }));
+    cardStage.style.height = ''; // release: card natural height ≈ H_prev → no reflow
   } else {
     exitAnim.cancel(); enterAnim.cancel();
+    cardStage.style.height = '';
     resetCardPositions(); renderPrevCard(state.prevHTML);
   }
   state.animating = false;
