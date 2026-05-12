@@ -1,55 +1,206 @@
-"""Pre-compute morpheme splits using MorphoLex via the morphemes library.
+"""Pre-compute morpheme splits for the word DB.
 
-Only stores results for words with 2+ morphemes (single-morpheme words get NULL).
-Run once after import: python scripts/populate_morphemes.py
+Strategy: curated prefix/suffix whitelist only — no auto-discovery.
+Only stores a split when a real affix is matched AND the remaining
+root is >= MIN_ROOT characters. NULL = no split (shown as full word).
+
+Run locally, then upload DB to server:
+  python scripts/populate_morphemes.py /path/to/words.db [--preview]
 """
+from __future__ import annotations
 import os
 import sqlite3
 import sys
 from pathlib import Path
 
-from morphemes import Morphemes
+# ── NLTK word set (lazy-loaded on first use) ──────────────────────────────────
 
-_default_db = Path(os.environ.get("APPDATA") or Path.home()) / "memorize" / "words.db"
-DB_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else _default_db
+_WORD_SET: set[str] | None = None
 
 
-def extract_parts(tree: list) -> list[dict]:
+def _get_word_set() -> set[str]:
+    global _WORD_SET
+    if _WORD_SET is None:
+        try:
+            import nltk
+            nltk.download("words", quiet=True)
+            from nltk.corpus import words as _nltk_words
+            _WORD_SET = set(w.lower() for w in _nltk_words.words())
+        except Exception as e:
+            sys.exit(f"ERROR: Could not load NLTK words corpus: {e}\n"
+                     "Run: pip install nltk && python -c \"import nltk; nltk.download('words')\"")
+    return _WORD_SET
+
+
+# ── Curated affix lists (longest-first for greedy matching) ──────────────────
+
+PREFIXES = sorted([
+    "circum", "pseudo", "hyper", "hypo", "macro", "micro",
+    "inter", "multi", "extra", "super", "under", "proto",
+    "trans", "anti", "semi", "mono", "para", "post", "fore",
+    "meta", "bene", "peri", "equi", "ambi", "over", "auto",
+    "non", "mid", "mis", "mal", "out", "pre", "pro", "sub",
+    "sur", "uni", "neo", "dis", "per", "obs", "com", "con",
+    "ob", "bi", "ad", "ab", "re", "en", "em", "un", "ex",
+    "il", "im", "in", "ir", "de",
+], key=lambda x: -len(x))
+
+SUFFIXES = sorted(dict.fromkeys([   # dict.fromkeys preserves order and deduplicates
+    "fication", "isation", "ization", "ational", "ication",
+    "iveness", "fulness", "ingness", "ousness",
+    "atorial", "ological",
+    "ation", "ative", "itude", "atory", "ician", "ition",
+    "ology", "itive", "ution", "ical", "ness", "ment", "less",
+    "ious", "sion", "tion", "ence", "eous", "ency", "ance",
+    "ancy", "ship", "ator", "ward", "hood", "ible", "able",
+    "ful", "ian", "ism", "ist", "ity", "ive", "ize", "ise",
+    "ify", "ing", "ion", "ary", "ory", "ial", "ous", "ate",
+    "ent", "ant", "age", "ure", "dom", "ish", "ess",
+    "ery", "tic", "acy", "ee", "ly", "al", "ic", "or",
+    "ty", "en", "cy",
+]), key=lambda x: -len(x))
+
+MIN_ROOT = 4
+
+# Known bound roots that don't appear in NLTK but are teachable morphemes
+BOUND_ROOTS = {
+    "struct", "rupt", "duct", "dict", "port", "tract", "ject",
+    "spect", "scribe", "script", "vert", "vers", "mit", "miss",
+    "cede", "ceed", "cess", "pend", "pens", "fect", "fic",
+    "cap", "cept", "ceive", "clude", "clus", "fer", "lat",
+    "solve", "solut", "pos", "pon", "pel", "puls", "sent",
+    "sequ", "sect", "sist", "tain", "ten", "val", "ven", "vent",
+    "voc", "vok", "vis", "vid",
+}
+
+# Words whose surface morphology looks splittable but is etymologically
+# wrong or would actively mislead learners — never split these.
+WORD_DENYLIST = {
+    "transparent",   # parent ≠ Latin paren(s)
+    "intense",       # in- here = "into", not negation
+    "refund",        # re+fund misleads into "fund again"
+    "average",       # aver+age has no learning value
+    "redundant",     # dund is not a teachable root
+    "setting",       # sett is a badger burrow, not the root
+    "nationalism",   # national should not be marked as root
+    "nationality",   # same issue
+}
+
+
+def _root_valid(root: str) -> bool:
+    ws = _get_word_set()
+    return (
+        root in ws
+        or root in BOUND_ROOTS
+        or (root + "e") in ws
+        or (root + "er") in ws
+    )
+
+
+def segment(word: str) -> str | None:
+    w = word.lower()
+
+    if w in WORD_DENYLIST:
+        return None
+
+    prefix = ""
+    for p in PREFIXES:
+        if w.startswith(p) and len(w) - len(p) >= MIN_ROOT:
+            prefix = p
+            w = w[len(p):]
+            break
+
+    suffix = ""
+    root = w
+    for s in SUFFIXES:
+        if w.endswith(s) and len(w) - len(s) >= MIN_ROOT:
+            candidate = w[: -len(s)]
+            if _root_valid(candidate):
+                suffix = s
+                root = candidate
+                break
+
+    if not _root_valid(root):
+        return None
+
+    if not prefix and not suffix:
+        return None
+
     parts = []
-    for node in (tree or []):
-        if not node or not isinstance(node, dict):
-            continue
-        if "text" in node:
-            parts.append({"text": node["text"], "type": node.get("type", "root")})
-        if "children" in node:
-            parts.extend(extract_parts(node["children"]))
-    return parts
+    if prefix:
+        parts.append(f"{prefix}:prefix")
+    parts.append(f"{root}:root")
+    if suffix:
+        parts.append(f"{suffix}:bound")
+    return "|".join(parts)
 
 
-def main():
-    mrp = Morphemes()
-    conn = sqlite3.connect(str(DB_PATH), timeout=60)
+def main() -> None:
+    args = sys.argv[1:]
+    preview = "--preview" in args
+    args = [a for a in args if not a.startswith("--")]
+
+    _default_db = Path(os.environ.get("APPDATA") or Path.home()) / "memorize" / "words.db"
+    db_path = Path(args[0]) if args else _default_db
+
+    conn = sqlite3.connect(str(db_path), timeout=60)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout = 60000")
+    try:
+        words_rows = conn.execute("SELECT id, word FROM words").fetchall()
 
-    words = conn.execute("SELECT id, word FROM words").fetchall()
-    updated = skipped = 0
+        print(f"Prefixes: {len(PREFIXES)}, Suffixes: {len(SUFFIXES)}")
 
-    for row in words:
-        r = mrp.parse(row["word"])
-        if r["status"] != "FOUND_IN_DATABASE" or r["morpheme_count"] < 2:
-            skipped += 1
-            continue
+        if preview:
+            import random
+            if not words_rows:
+                print("No words in DB.")
+                return
 
-        parts = extract_parts(r["tree"])
-        # store as "un:prefix|believe:root|able:bound"
-        value = "|".join(p["text"] + ":" + p["type"] for p in parts)
-        conn.execute("UPDATE words SET morphemes=? WHERE id=?", (value, row["id"]))
-        updated += 1
+            # Compute once, reuse for both display and stats
+            results = {r["word"]: segment(r["word"]) for r in words_rows}
+            words = list(results)
 
-    conn.commit()
-    conn.close()
-    print(f"Done: {updated} updated, {skipped} skipped (single morpheme or not found)")
+            samples = [
+                "unbelievable", "reconstruction", "independence", "misunderstand",
+                "uncomfortable", "prehistoric", "international", "abbreviation",
+                "abnormal", "accommodation", "unemployment", "disappear",
+                "impossible", "advertisement", "nationalism", "distinguish",
+                "applaud", "suffer", "mortal", "construct", "disorder",
+                "amount", "rescue", "average", "schedule", "ancestor",
+                "represent", "redundant", "transparent", "benevolent",
+            ]
+            word_set = set(results)
+            print("\n=== Target samples ===")
+            for w in samples:
+                result = results.get(w) or segment(w)
+                tag = "(not in list)" if w not in word_set else ""
+                print(f"  {w:30s} -> {result or '(no split)'} {tag}")
+
+            print("\n=== Random 30 from list ===")
+            for w in sorted(random.sample(words, min(30, len(words)))):
+                if results[w]:
+                    print(f"  {w:30s} -> {results[w]}")
+
+            multi = sum(1 for v in results.values() if v)
+            total = len(words)
+            pct = f"{multi/total*100:.1f}%" if total else "N/A"
+            print(f"\nTotal: {total}, Would split: {multi} ({pct})")
+            return
+
+        updated = skipped = 0
+        for row in words_rows:
+            result = segment(row["word"])
+            conn.execute("UPDATE words SET morphemes=? WHERE id=?", (result, row["id"]))
+            if result:
+                updated += 1
+            else:
+                skipped += 1
+
+        conn.commit()
+        print(f"Done: {updated} updated, {skipped} no split (NULL)")
+
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
