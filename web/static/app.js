@@ -302,8 +302,8 @@ async function fetchWord() {
 const EXIT_EASING  = 'cubic-bezier(0.4, 0, 1, 1)';
 const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-const KF_EXIT_UP    = [{ transform: 'none', opacity: 1 }, { transform: 'translateY(-56px) scale(0.97)', opacity: 0 }];
-const KF_ENTER_DOWN = [{ transform: 'translateY(56px) scale(0.97)', opacity: 0 }, { transform: 'none', opacity: 1 }];
+const KF_EXIT_LEFT  = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(-100px) scale(0.97)', opacity: 0 }];
+const KF_ENTER_RIGHT= [{ transform: 'translateX(80px) scale(0.97)', opacity: 0 }, { transform: 'none', opacity: 1 }];
 const KF_EXIT_RIGHT = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(100px)', opacity: 0 }];
 const KF_ENTER_LEFT = [{ transform: 'translateX(-80px)', opacity: 0 }, { transform: 'none', opacity: 1 }];
 
@@ -341,7 +341,7 @@ async function submitRating(rating) {
 
   if (state.next) {
     // Optimistic: show next word immediately, submit in background
-    const exitAnim = await cardExit(KF_EXIT_UP, 160);
+    const exitAnim = await cardExit(KF_EXIT_LEFT, 160);
     state.word      = state.next;
     state.intervals = state.next.intervals || null;
     state.next      = null;
@@ -350,7 +350,7 @@ async function submitRating(rating) {
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
     // Keep animating=true during enter, then unlock
-    const enterDone = cardEnter(KF_ENTER_DOWN, 240, exitAnim).then(unlock);
+    const enterDone = cardEnter(KF_ENTER_RIGHT, 240, exitAnim).then(unlock);
     // Submit in background (don't block enter)
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
@@ -366,7 +366,7 @@ async function submitRating(rating) {
     try {
       const [data, exitAnim] = await Promise.all([
         submitWithRetry(wordId, rating),
-        cardExit(KF_EXIT_UP, 160),
+        cardExit(KF_EXIT_LEFT, 160),
       ]);
       state.word      = data.word;
       state.stats     = data.stats;
@@ -377,7 +377,7 @@ async function submitRating(rating) {
       setPhase(1);
       card.classList.remove('loading');
       btns.forEach(b => b.disabled = false);
-      await cardEnter(KF_ENTER_DOWN, 240, exitAnim);
+      await cardEnter(KF_ENTER_RIGHT, 240, exitAnim);
       unlock();
       prefetchNext();
     } catch (e) {
