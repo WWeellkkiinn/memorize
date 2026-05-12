@@ -62,7 +62,7 @@ def load_config() -> Config:
                 data.get("word_change_interval_sec", defaults.word_change_interval_sec)
             )),
             mode=str(data.get("mode", defaults.mode)),
-            server_url=str(data.get("server_url", defaults.server_url)),
+            server_url=os.environ.get("MEMORIZE_SERVER_URL") or str(data.get("server_url", "")),
             server_user=os.environ.get("MEMORIZE_SERVER_USER") or str(data.get("server_user", "")),
             server_pass=os.environ.get("MEMORIZE_SERVER_PASS") or str(data.get("server_pass", "")),
         )
@@ -74,6 +74,7 @@ def load_config() -> Config:
 def save_config(config: Config) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     data = asdict(config)
+    data.pop("server_url", None)
     data.pop("server_user", None)
     data.pop("server_pass", None)
     tmp = CONFIG_PATH.with_suffix(".tmp")
