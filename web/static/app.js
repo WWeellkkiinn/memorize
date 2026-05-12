@@ -1,5 +1,7 @@
 'use strict';
 
+const MORPHEME_TYPES = new Set(['prefix', 'root', 'bound', 'free']);
+
 const STAGE_COLORS = {
   '新词': 'var(--stage-new)',
   '初识': 'var(--stage-familiar)',
@@ -186,7 +188,6 @@ function renderWord() {
   wordPos.textContent   = w.pos || '';
   wordPhone.textContent = w.phonetic ? `/${w.phonetic}/` : '';
 
-  const MORPHEME_TYPES = new Set(['prefix', 'root', 'bound', 'free']);
   if (w.morphemes) {
     const parts = w.morphemes.split('|').map(p => {
       const idx = p.indexOf(':');

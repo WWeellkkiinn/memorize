@@ -262,13 +262,6 @@ class WordStore:
             row = conn.execute("SELECT COUNT(*) AS n FROM words").fetchone()
         return row["n"] if row else 0
 
-    def introduced_words(self) -> int:
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) AS n FROM cards WHERE introduced_date IS NOT NULL"
-            ).fetchone()
-        return row["n"] if row else 0
-
     def get_progress(self) -> dict:
         with self._conn() as conn:
             row = conn.execute(

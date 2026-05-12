@@ -3,13 +3,15 @@
 Only stores results for words with 2+ morphemes (single-morpheme words get NULL).
 Run once after import: python scripts/populate_morphemes.py
 """
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 from morphemes import Morphemes
 
-DB_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "memorize" / "words.db"
+_default_db = Path(os.environ.get("APPDATA") or Path.home()) / "memorize" / "words.db"
+DB_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else _default_db
 
 
 def extract_parts(tree: list) -> list[dict]:
