@@ -315,12 +315,3 @@ body {
 
 .hidden    { display: none !important; }
 .invisible { visibility: hidden !important; pointer-events: none !important; }
-
-/* ── Mobile font scale ─────────────────────────────────────────────────────── */
-
-@media (max-width: 480px) {
-  #word-text       { font-size: 34px; }
-  #definition      { font-size: 16px; }
-  .example-en,
-  .example-zh      { font-size: 15px; }
-}
