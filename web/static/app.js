@@ -432,7 +432,7 @@ async function submitRating(rating) {
 // On commit: current exits right, prev enters center; then content + positions reset.
 
 const UNDO_THRESHOLD = 80;
-let _sx = 0, _swipeDir = null;
+let _sx = 0, _sy = 0, _swipeDir = null;
 let _pendingUndo = false;
 
 function _curCardDx() {
@@ -527,6 +527,7 @@ async function _commitSwipe() {
 
 card.addEventListener('touchstart', e => {
   _sx = e.touches[0].clientX;
+  _sy = e.touches[0].clientY;
   _swipeDir = null;
 }, { passive: true });
 
