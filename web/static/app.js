@@ -337,6 +337,7 @@ async function submitRating(rating) {
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
     state.animating = false;
+    if (_pendingUndo && state.phase === 2) { _pendingUndo = false; submitUndo(); }
   };
 
   if (state.next) {
@@ -387,6 +388,13 @@ async function submitRating(rating) {
   }
 }
 
+// ── Swipe-right to undo ───────────────────────────────────────────────────────
+
+const UNDO_THRESHOLD = 80;
+let _sx = 0, _sy = 0, _swipeDir = null;
+let _pendingUndo = false; // committed swipe during animation → run undo after unlock
+
+// Called by submitRating's unlock when pendingUndo is set
 async function submitUndo() {
   if (state.animating || state.phase !== 2) return;
   state.animating = true;
@@ -399,14 +407,8 @@ async function submitUndo() {
       state.animating = false;
       return;
     }
-    const exitAnim = await cardExit(KF_EXIT_RIGHT, 160);
-    state.word      = data.word;
-    state.stats     = data.stats;
-    state.progress  = data.progress;
-    state.intervals = data.intervals;
-    state.next      = null;
-    renderStats();
-    setPhase(1);
+    const exitAnim = await cardExit(KF_EXIT_RIGHT, 200);
+    _applyUndoData(data);
     card.classList.remove('loading');
     await cardEnter(KF_ENTER_LEFT, 240, exitAnim);
     state.animating = false;
@@ -418,29 +420,93 @@ async function submitUndo() {
   }
 }
 
-// ── Swipe-right to undo ───────────────────────────────────────────────────────
-// touch-action: pan-y on #card lets browser handle vertical scroll;
-// we intercept horizontal swipes here with no preventDefault needed.
+// Commit swipe: card is already at `capturedDx` pixels to the right.
+// Continue exit from that position while fetching undo in parallel.
+async function _commitSwipe(capturedDx, capturedOpacity) {
+  if (state.phase !== 2) return;
+  if (state.animating) {
+    // Animation in flight — queue and snap back visually
+    _pendingUndo = true;
+    card.animate(
+      [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
+       { transform: 'none', opacity: '1' }],
+      { duration: 220, easing: ENTER_EASING }
+    );
+    return;
+  }
+  state.animating = true;
+  card.classList.add('loading');
 
-const UNDO_THRESHOLD = 80;
-let _sx = 0, _sy = 0, _swipeDir = null; // 'h' | 'v' | null
+  // Exit continues from finger position (feels seamless)
+  const exitAnim = card.animate(
+    [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
+     { transform: 'translateX(110vw)', opacity: 0 }],
+    { duration: 200, easing: EXIT_EASING, fill: 'forwards' }
+  );
 
-function _swipeReset() {
-  _swipeDir = null;
+  try {
+    const [data] = await Promise.all([
+      fetch('/api/undo', { method: 'POST' }).then(r => r.json()),
+      exitAnim.finished,
+    ]);
+    if (!data.word) {
+      // Nothing to undo — snap back
+      exitAnim.cancel();
+      card.animate(
+        [{ transform: `translateX(${capturedDx}px)`, opacity: String(capturedOpacity) },
+         { transform: 'none', opacity: '1' }],
+        { duration: 220, easing: ENTER_EASING }
+      );
+      card.classList.remove('loading');
+      state.animating = false;
+      return;
+    }
+    exitAnim.cancel(); // remove forwards fill
+    cancelCardAnims();
+    _applyUndoData(data);
+    card.classList.remove('loading');
+    await cardEnter(KF_ENTER_LEFT, 240);
+    state.animating = false;
+    prefetchNext();
+  } catch (e) {
+    exitAnim.cancel();
+    cancelCardAnims();
+    card.classList.remove('loading');
+    state.animating = false;
+  }
+}
+
+function _applyUndoData(data) {
+  state.word      = data.word;
+  state.stats     = data.stats;
+  state.progress  = data.progress;
+  state.intervals = data.intervals;
+  state.next      = null;
+  renderStats();
+  setPhase(1);
+}
+
+function _swipeSnapBack(fromDx, fromOpacity) {
   card.style.transform = '';
   card.style.opacity = '';
-  undoHint.style.opacity = '0';
+  if (fromDx > 2) {
+    card.animate(
+      [{ transform: `translateX(${fromDx}px)`, opacity: String(fromOpacity) },
+       { transform: 'none', opacity: '1' }],
+      { duration: 220, easing: ENTER_EASING }
+    );
+  }
 }
 
 card.addEventListener('touchstart', e => {
-  if (state.animating) return;
+  // Allow gesture start even during animation (req 2)
   _sx = e.touches[0].clientX;
   _sy = e.touches[0].clientY;
   _swipeDir = null;
 }, { passive: true });
 
 card.addEventListener('touchmove', e => {
-  if (state.phase !== 2 || state.animating) return;
+  if (state.phase !== 2) return;
   const dx = e.touches[0].clientX - _sx;
   const dy = e.touches[0].clientY - _sy;
   const adx = Math.abs(dx), ady = Math.abs(dy);
@@ -450,35 +516,41 @@ card.addEventListener('touchmove', e => {
   }
   if (_swipeDir !== 'h' || dx <= 0) return;
 
-  const travel = Math.min(dx * 0.55, UNDO_THRESHOLD * 1.3);
+  // 1:1 follow with rubber-band past threshold
+  const travel = dx <= UNDO_THRESHOLD
+    ? dx
+    : UNDO_THRESHOLD + (dx - UNDO_THRESHOLD) * 0.25;
   card.style.transform = `translateX(${travel}px)`;
-  card.style.opacity = String(Math.max(0.4, 1 - dx / (UNDO_THRESHOLD * 2.5)));
+  card.style.opacity = String(Math.max(0.35, 1 - dx / (UNDO_THRESHOLD * 2)));
   undoHint.style.opacity = String(Math.min(1, dx / UNDO_THRESHOLD));
 }, { passive: true });
 
 card.addEventListener('touchend', e => {
-  if (_swipeDir !== 'h') { _swipeReset(); return; }
+  undoHint.style.opacity = '0';
+  if (_swipeDir !== 'h') { _swipeDir = null; return; }
   const dx = e.changedTouches[0].clientX - _sx;
-  if (dx > UNDO_THRESHOLD && state.phase === 2 && !state.animating) {
-    _swipeReset();
-    submitUndo();
+  const curDx = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
+  const curOp = parseFloat(card.style.opacity) || 1;
+  card.style.transform = '';
+  card.style.opacity = '';
+  _swipeDir = null;
+
+  if (dx > UNDO_THRESHOLD) {
+    _commitSwipe(curDx, curOp);
   } else {
-    // Snap back with a quick animation
-    const fromX = card.style.transform;
-    card.style.transform = '';
-    card.style.opacity = '';
-    undoHint.style.opacity = '0';
-    _swipeDir = null;
-    if (fromX) {
-      card.animate(
-        [{ transform: fromX, opacity: card.style.opacity || '1' }, { transform: 'none', opacity: '1' }],
-        { duration: 220, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
-      );
-    }
+    _swipeSnapBack(curDx, curOp);
   }
 }, { passive: true });
 
-card.addEventListener('touchcancel', _swipeReset, { passive: true });
+card.addEventListener('touchcancel', () => {
+  const curDx = parseFloat(card.style.transform.replace('translateX(', '')) || 0;
+  const curOp = parseFloat(card.style.opacity) || 1;
+  card.style.transform = '';
+  card.style.opacity = '';
+  undoHint.style.opacity = '0';
+  _swipeDir = null;
+  _swipeSnapBack(curDx, curOp);
+}, { passive: true });
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 
