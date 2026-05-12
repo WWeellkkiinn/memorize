@@ -162,7 +162,7 @@ function renderStats() {
     statStage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
   }
   if (p) {
-    statProgress.textContent = `${p.introduced} / ${p.total} 词`;
+    statProgress.textContent = `${p.introduced} / ${p.total}`;
   }
   if (s) {
     const total = s.newTotal + s.reviewedTotal;

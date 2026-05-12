@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;700&family=Lexend:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&display=swap');
 
 :root {
   --bg:             #F3F4F8;
@@ -151,6 +151,7 @@ body {
 
 #definition {
   font-size: 18px;
+  font-weight: 600;
   line-height: 1.7;
   color: var(--text);
   border-left: 3px solid var(--accent);
@@ -176,6 +177,7 @@ body {
 
 .example-en {
   font-size: 17px;
+  font-weight: 600;
   color: var(--text);
   line-height: 1.6;
 }
@@ -189,6 +191,7 @@ body {
 
 .example-zh {
   font-size: 17px;
+  font-weight: 600;
   color: var(--text);
   margin-top: 6px;
   line-height: 1.5;
@@ -241,6 +244,7 @@ body {
   padding-top: 10px;
   border-top: 1px solid var(--border);
   font-size: 16px;
+  font-weight: 600;
   color: var(--text-muted);
 }
 
