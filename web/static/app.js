@@ -99,14 +99,15 @@ function regularForms(baseWord) {
   return [...forms].sort((a, b) => b.length - a.length);
 }
 
-let _wordRegexCache = { word: null, re: null };
+const _wordRegexCache = new Map(); // two-slot: holds current + next word to avoid cross-pollution
 function buildWordRegex(baseWord) {
-  if (_wordRegexCache.word === baseWord) return _wordRegexCache.re;
+  if (_wordRegexCache.has(baseWord)) return _wordRegexCache.get(baseWord);
   const forms = regularForms(baseWord);
   const re = forms.length
     ? new RegExp(`(^|[^A-Za-z])(${forms.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?=$|[^A-Za-z])`, 'gi')
     : null;
-  _wordRegexCache = { word: baseWord, re };
+  if (_wordRegexCache.size >= 2) _wordRegexCache.delete(_wordRegexCache.keys().next().value);
+  _wordRegexCache.set(baseWord, re);
   return re;
 }
 
@@ -357,9 +358,9 @@ const CARD_GAP = 16;
 
 function getCardW() { return card.offsetWidth + CARD_GAP; }
 
-function prevOffScreen(side = 'left') {
+function prevOffScreen(side = 'left', w = null) {
   const sign = side === 'right' ? 1 : -1;
-  return `translateX(${sign * getCardW()}px) translateY(-50%)`;
+  return `translateX(${sign * (w ?? getCardW())}px) translateY(-50%)`;
 }
 
 function resetCardPositions() {
@@ -369,14 +370,14 @@ function resetCardPositions() {
   cardPrev.style.transform = prevOffScreen('left');
 }
 
-function renderPrevCard(html, side = 'left') {
+function renderPrevCard(html, side = 'left', w = null) {
   cardPrev.getAnimations().forEach(a => a.cancel());
   if (!html) {
     cardPrev.style.visibility = 'hidden';
     cardPrev.innerHTML = '';
     return;
   }
-  const offScreen = prevOffScreen(side); // read layout BEFORE DOM write to avoid forced reflow
+  const offScreen = prevOffScreen(side, w); // read layout BEFORE DOM write to avoid forced reflow
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
   cardPrev.style.transform = offScreen;
@@ -404,9 +405,9 @@ async function submitRating(rating) {
     const prevHTML  = card.innerHTML;
     const nextWord  = state.next;
 
-    // Pre-render next card off-screen RIGHT (read W before DOM write)
-    renderPrevCard(buildNextCardHTML(nextWord), 'right');
+    // Pre-render next card off-screen RIGHT (compute W before DOM write to avoid double reflow)
     const W = getCardW();
+    renderPrevCard(buildNextCardHTML(nextWord), 'right', W);
 
     // Both cards slide LEFT together on the same rail — identical easing keeps them locked
     const exitAnim = card.animate(
@@ -511,7 +512,8 @@ async function submitRating(rating) {
 
 const UNDO_THRESHOLD = 80;
 let _sx = 0, _sy = 0, _swipeDir = null;
-let _cachedCardW = 0; // cached in touchstart to avoid per-frame layout reads
+let _cachedCardW = 0; // cached in touchstart; reset on resize
+window.addEventListener('resize', () => { _cachedCardW = 0; }, { passive: true });
 let _pendingUndo = false;
 let _submitGen = 0;   // incremented each submitRating call; stale doSubmit retries check this
 
@@ -580,8 +582,9 @@ async function _commitSwipe() {
   } catch {
     exitAnim.cancel(); enterAnim.cancel();
     cardStage.style.height = '';
-    resetCardPositions();
-    if (state.prevHTML) renderPrevCard(state.prevHTML); // guard: null after consecutive undos
+    card.getAnimations().forEach(a => a.cancel());
+    card.style.transform = '';
+    renderPrevCard(state.prevHTML || null); // handles null (hides) and restores prevHTML in one call
     _pendingUndo = false;
     state.animating = false;
     return;
@@ -613,7 +616,9 @@ async function _commitSwipe() {
   } else {
     exitAnim.cancel(); enterAnim.cancel();
     cardStage.style.height = '';
-    resetCardPositions(); renderPrevCard(state.prevHTML);
+    card.getAnimations().forEach(a => a.cancel());
+    card.style.transform = '';
+    renderPrevCard(state.prevHTML || null);
   }
   state.animating = false;
   prefetchNext();
