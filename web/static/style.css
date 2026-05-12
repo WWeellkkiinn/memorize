@@ -35,7 +35,7 @@ body {
     radial-gradient(ellipse 80% 40% at 50% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 70%),
     var(--bg);
   color: var(--text);
-  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  font-family: 'Lora', "PingFang SC", "Microsoft YaHei", "Noto Sans SC", serif;
   min-height: 100dvh;
   padding: 20px 16px 32px;
   display: flex;
