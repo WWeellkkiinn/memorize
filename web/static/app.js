@@ -309,8 +309,6 @@ const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
 const KF_EXIT_LEFT  = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(-100px) scale(0.97)', opacity: 0 }];
 const KF_ENTER_RIGHT= [{ transform: 'translateX(80px) scale(0.97)', opacity: 0 }, { transform: 'none', opacity: 1 }];
-const KF_EXIT_RIGHT = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(100px)', opacity: 0 }];
-const KF_ENTER_LEFT = [{ transform: 'translateX(-80px)', opacity: 0 }, { transform: 'none', opacity: 1 }];
 
 function cancelCardAnims() {
   card.getAnimations().forEach(a => a.cancel());
@@ -336,14 +334,19 @@ const CARD_GAP = 16;
 
 function getCardW() { return card.offsetWidth + CARD_GAP; }
 
+function prevOffScreen() {
+  return `translateX(${-getCardW()}px) translateY(-50%)`;
+}
+
 function resetCardPositions() {
   card.getAnimations().forEach(a => a.cancel());
   cardPrev.getAnimations().forEach(a => a.cancel());
   card.style.transform = '';
-  cardPrev.style.transform = `translateX(${-getCardW()}px)`;
+  cardPrev.style.transform = prevOffScreen();
 }
 
 function renderPrevCard(html) {
+  cardPrev.getAnimations().forEach(a => a.cancel());
   if (!html) {
     cardPrev.style.visibility = 'hidden';
     cardPrev.innerHTML = '';
@@ -351,6 +354,7 @@ function renderPrevCard(html) {
   }
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
+  cardPrev.style.transform = prevOffScreen(); // always reset to correct off-screen position
 }
 
 async function submitRating(rating) {
@@ -428,7 +432,7 @@ async function submitRating(rating) {
 // On commit: current exits right, prev enters center; then content + positions reset.
 
 const UNDO_THRESHOLD = 80;
-let _sx = 0, _sy = 0, _swipeDir = null;
+let _sx = 0, _swipeDir = null;
 let _pendingUndo = false;
 
 function _curCardDx() {
@@ -444,9 +448,10 @@ function _snapAllBack() {
   card.style.transform = '';
   card.animate([{ transform: `translateX(${curDx}px)` }, { transform: 'none' }], opts);
   if (state.prev) {
-    cardPrev.style.transform = `translateX(${-W}px)`;
+    const offScreen = prevOffScreen();
+    cardPrev.style.transform = offScreen;
     cardPrev.animate(
-      [{ transform: `translateX(${-W + curDx}px)` }, { transform: `translateX(${-W}px)` }],
+      [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` }, { transform: offScreen }],
       opts
     );
   }
@@ -473,7 +478,8 @@ async function _commitSwipe() {
     { duration: 240, easing: EXIT_EASING, fill: 'forwards' }
   );
   const enterAnim = cardPrev.animate(
-    [{ transform: `translateX(${-W + curDx}px)` }, { transform: 'translateX(0)' }],
+    [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` },
+     { transform: 'translateX(0) translateY(-50%)' }],
     { duration: 240, easing: ENTER_EASING, fill: 'forwards' }
   );
 
@@ -495,7 +501,7 @@ async function _commitSwipe() {
   if (data && data.word) {
     // Set inline positions before cancel so element snaps to these values
     card.style.transform = '';
-    cardPrev.style.transform = `translateX(${-W}px)`;
+    cardPrev.style.transform = prevOffScreen();
     exitAnim.cancel();
     enterAnim.cancel();
 
@@ -521,7 +527,6 @@ async function _commitSwipe() {
 
 card.addEventListener('touchstart', e => {
   _sx = e.touches[0].clientX;
-  _sy = e.touches[0].clientY;
   _swipeDir = null;
 }, { passive: true });
 
@@ -539,7 +544,7 @@ card.addEventListener('touchmove', e => {
   let travel;
   if (state.prev) {
     travel = dx <= UNDO_THRESHOLD ? dx : UNDO_THRESHOLD + (dx - UNDO_THRESHOLD) * 0.25;
-    cardPrev.style.transform = `translateX(${-W + travel}px)`;
+    cardPrev.style.transform = `translateX(${-W + travel}px) translateY(-50%)`;
   } else {
     travel = Math.min(dx * 0.12, 18); // heavy resistance at boundary
   }
