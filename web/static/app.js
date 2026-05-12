@@ -49,6 +49,11 @@ function hide(el)    { el.classList.add('hidden'); }
 function visHide(el) { el.classList.add('invisible'); }
 function visShow(el) { el.classList.remove('invisible'); }
 
+function reveal(el) {
+  el.classList.add('revealing');
+  el.addEventListener('animationend', () => el.classList.remove('revealing'), { once: true });
+}
+
 function escHtml(s) {
   return String(s || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -266,6 +271,7 @@ function setPhase(n) {
     show(hintArea);
     visHide(definition);
     show(examples);
+    ratingRow.classList.remove('revealing');
     visHide(ratingRow);
     renderWord();
     startCountdown();
@@ -273,20 +279,15 @@ function setPhase(n) {
     hide(hintArea);
     visShow(definition);
     show(examples);
-    examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('invisible'));
-    show(ratingRow);
-    ratingRow.classList.add('revealing');
-    ratingRow.addEventListener('animationend', () => ratingRow.classList.remove('revealing'), { once: true });
-    // 揭示 fade-in 动画：定义先出，例句中文错开跟上
-    definition.classList.add('revealing');
-    definition.addEventListener('animationend', () => definition.classList.remove('revealing'), { once: true });
-    examples.querySelectorAll('.example-zh').forEach((el, i) => {
+    const zhEls = examples.querySelectorAll('.example-zh');
+    zhEls.forEach(el => el.classList.remove('invisible'));
+    visShow(ratingRow);
+    reveal(ratingRow);
+    reveal(definition);
+    zhEls.forEach((el, i) => {
       el.style.animationDelay = (50 + i * 50) + 'ms';
-      el.classList.add('revealing');
-      el.addEventListener('animationend', () => {
-        el.classList.remove('revealing');
-        el.style.animationDelay = '';
-      }, { once: true });
+      el.addEventListener('animationend', () => { el.style.animationDelay = ''; }, { once: true });
+      reveal(el);
     });
   }
 }
