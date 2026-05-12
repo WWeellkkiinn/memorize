@@ -297,14 +297,32 @@ async function fetchWord() {
   }
 }
 
-function cardAnimate(name, duration, easing = 'ease') {
-  return new Promise(resolve => {
-    card.style.animation = `${name} ${duration}ms ${easing} forwards`;
-    const done = () => { clearTimeout(fallback); card.removeEventListener('animationend', onEnd); resolve(); };
-    const onEnd = e => { if (e.target === card && e.animationName === name) done(); };
-    const fallback = setTimeout(done, duration + 100);
-    card.addEventListener('animationend', onEnd);
-  });
+// ── Web Animations API helpers ────────────────────────────────────────────────
+
+const EXIT_EASING  = 'cubic-bezier(0.4, 0, 1, 1)';
+const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+const KF_EXIT_UP    = [{ transform: 'none', opacity: 1 }, { transform: 'translateY(-56px) scale(0.97)', opacity: 0 }];
+const KF_ENTER_DOWN = [{ transform: 'translateY(56px) scale(0.97)', opacity: 0 }, { transform: 'none', opacity: 1 }];
+const KF_EXIT_RIGHT = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(100px)', opacity: 0 }];
+const KF_ENTER_LEFT = [{ transform: 'translateX(-80px)', opacity: 0 }, { transform: 'none', opacity: 1 }];
+
+function cancelCardAnims() {
+  card.getAnimations().forEach(a => a.cancel());
+}
+
+async function cardExit(keyframes, duration) {
+  cancelCardAnims();
+  const anim = card.animate(keyframes, { duration, easing: EXIT_EASING, fill: 'forwards' });
+  await anim.finished;
+  return anim;
+}
+
+async function cardEnter(keyframes, duration, exitAnim) {
+  if (exitAnim) exitAnim.cancel(); // drop forwards fill so enter starts clean
+  cancelCardAnims();
+  const anim = card.animate(keyframes, { duration, easing: ENTER_EASING });
+  await anim.finished;
 }
 
 async function submitRating(rating) {
@@ -315,54 +333,55 @@ async function submitRating(rating) {
   card.classList.add('loading');
   btns.forEach(b => b.disabled = true);
 
-  function reset() {
-    card.style.animation = '';
+  const unlock = () => {
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
     state.animating = false;
-  }
+  };
 
   if (state.next) {
-    // Optimistic path: show next word immediately, submit rating in background
-    await cardAnimate('cardExitUp', 160, 'cubic-bezier(0.4, 0, 1, 1)');
+    // Optimistic: show next word immediately, submit in background
+    const exitAnim = await cardExit(KF_EXIT_UP, 160);
     state.word      = state.next;
     state.intervals = state.next.intervals || null;
     state.next      = null;
     renderStats();
     setPhase(1);
-    reset();
-    cardAnimate('cardEnterFromBelow', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
-      .then(() => { card.style.animation = ''; });
-
+    card.classList.remove('loading');
+    btns.forEach(b => b.disabled = false);
+    // Keep animating=true during enter, then unlock
+    const enterDone = cardEnter(KF_ENTER_DOWN, 240, exitAnim).then(unlock);
+    // Submit in background (don't block enter)
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
         prefetchNext();
       })
       .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
-
     doSubmit(wordId, rating);
+    await enterDone;
 
   } else {
-    // Fallback: wait for API (no prefetch ready)
+    // Fallback: wait for API
     try {
-      const [data] = await Promise.all([
+      const [data, exitAnim] = await Promise.all([
         submitWithRetry(wordId, rating),
-        cardAnimate('cardExitUp', 160, 'cubic-bezier(0.4, 0, 1, 1)'),
+        cardExit(KF_EXIT_UP, 160),
       ]);
       state.word      = data.word;
       state.stats     = data.stats;
       state.progress  = data.progress;
       state.intervals = data.intervals;
-      if (!data.word) { reset(); return; }
+      if (!data.word) { unlock(); return; }
       renderStats();
       setPhase(1);
-      reset();
-      await cardAnimate('cardEnterFromBelow', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
-      card.style.animation = '';
+      card.classList.remove('loading');
+      btns.forEach(b => b.disabled = false);
+      await cardEnter(KF_ENTER_DOWN, 240, exitAnim);
+      unlock();
       prefetchNext();
     } catch (e) {
-      reset();
+      unlock();
       showToast('提交失败，请检查网络', () => submitRating(rating));
     }
   }
@@ -376,12 +395,11 @@ async function submitUndo() {
     const res = await fetch('/api/undo', { method: 'POST' });
     const data = await res.json();
     if (!data.word) {
-      // No undo available — snap back
       card.classList.remove('loading');
       state.animating = false;
       return;
     }
-    await cardAnimate('cardExitDown', 160, 'cubic-bezier(0.4, 0, 1, 1)');
+    const exitAnim = await cardExit(KF_EXIT_RIGHT, 160);
     state.word      = data.word;
     state.stats     = data.stats;
     state.progress  = data.progress;
@@ -389,62 +407,78 @@ async function submitUndo() {
     state.next      = null;
     renderStats();
     setPhase(1);
-    card.style.animation = '';
     card.classList.remove('loading');
+    await cardEnter(KF_ENTER_LEFT, 240, exitAnim);
     state.animating = false;
-    await cardAnimate('cardEnterFromAbove', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
-    card.style.animation = '';
     prefetchNext();
   } catch (e) {
-    card.style.animation = '';
+    cancelCardAnims();
     card.classList.remove('loading');
     state.animating = false;
   }
 }
 
-// ── Swipe-down to undo ────────────────────────────────────────────────────────
+// ── Swipe-right to undo ───────────────────────────────────────────────────────
+// touch-action: pan-y on #card lets browser handle vertical scroll;
+// we intercept horizontal swipes here with no preventDefault needed.
 
 const UNDO_THRESHOLD = 80;
-let _swipeStartY = 0;
-let _swipeStartX = 0;
-let _swipeActive = false;
+let _sx = 0, _sy = 0, _swipeDir = null; // 'h' | 'v' | null
+
+function _swipeReset() {
+  _swipeDir = null;
+  card.style.transform = '';
+  card.style.opacity = '';
+  undoHint.style.opacity = '0';
+}
 
 card.addEventListener('touchstart', e => {
-  if (state.phase !== 2 || state.animating) return;
-  _swipeStartY = e.touches[0].clientY;
-  _swipeStartX = e.touches[0].clientX;
-  _swipeActive = false;
+  if (state.animating) return;
+  _sx = e.touches[0].clientX;
+  _sy = e.touches[0].clientY;
+  _swipeDir = null;
 }, { passive: true });
 
 card.addEventListener('touchmove', e => {
   if (state.phase !== 2 || state.animating) return;
-  const dy = e.touches[0].clientY - _swipeStartY;
-  const dx = Math.abs(e.touches[0].clientX - _swipeStartX);
-  if (dy > 8 && dy > dx) {
-    e.preventDefault(); // block pull-to-refresh
-    _swipeActive = true;
-    const travel = Math.min(dy * 0.45, UNDO_THRESHOLD * 0.8);
-    card.style.transform = `translateY(${travel}px)`;
-    undoHint.style.opacity = Math.min(1, dy / UNDO_THRESHOLD).toFixed(2);
+  const dx = e.touches[0].clientX - _sx;
+  const dy = e.touches[0].clientY - _sy;
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+
+  if (_swipeDir === null && (adx > 6 || ady > 6)) {
+    _swipeDir = adx > ady ? 'h' : 'v';
   }
-}, { passive: false });
+  if (_swipeDir !== 'h' || dx <= 0) return;
+
+  const travel = Math.min(dx * 0.55, UNDO_THRESHOLD * 1.3);
+  card.style.transform = `translateX(${travel}px)`;
+  card.style.opacity = String(Math.max(0.4, 1 - dx / (UNDO_THRESHOLD * 2.5)));
+  undoHint.style.opacity = String(Math.min(1, dx / UNDO_THRESHOLD));
+}, { passive: true });
 
 card.addEventListener('touchend', e => {
-  undoHint.style.opacity = '0';
-  if (!_swipeActive) return;
-  _swipeActive = false;
-  const dy = e.changedTouches[0].clientY - _swipeStartY;
-  card.style.transform = '';
-  if (dy > UNDO_THRESHOLD) {
+  if (_swipeDir !== 'h') { _swipeReset(); return; }
+  const dx = e.changedTouches[0].clientX - _sx;
+  if (dx > UNDO_THRESHOLD && state.phase === 2 && !state.animating) {
+    _swipeReset();
     submitUndo();
+  } else {
+    // Snap back with a quick animation
+    const fromX = card.style.transform;
+    card.style.transform = '';
+    card.style.opacity = '';
+    undoHint.style.opacity = '0';
+    _swipeDir = null;
+    if (fromX) {
+      card.animate(
+        [{ transform: fromX, opacity: card.style.opacity || '1' }, { transform: 'none', opacity: '1' }],
+        { duration: 220, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }
+      );
+    }
   }
 }, { passive: true });
 
-card.addEventListener('touchcancel', () => {
-  _swipeActive = false;
-  card.style.transform = '';
-  undoHint.style.opacity = '0';
-}, { passive: true });
+card.addEventListener('touchcancel', _swipeReset, { passive: true });
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 
