@@ -151,57 +151,6 @@ function clearTimers() {
   state.revealTimer = null;
 }
 
-// 卡片高度平滑过渡：分帧写入确保浏览器有起始快照，支持取消上一轮动画
-let _animCancel = null;
-
-function animateCardHeight(callback) {
-  if (_animCancel) { _animCancel(); _animCancel = null; }
-
-  const from = card.offsetHeight;
-  card.style.height = from + 'px';
-  card.style.overflow = 'hidden';
-  callback();
-  card.style.height = 'auto';
-  const to = card.offsetHeight;
-  card.style.height = from + 'px';
-  void card.offsetHeight;
-
-  const cleanup = () => {
-    card.style.height = '';
-    card.style.overflow = '';
-    card.style.transition = '';
-    _animCancel = null;
-  };
-
-  if (from === to) { cleanup(); return; }
-
-  let rafId, timeoutId, listener;
-
-  _animCancel = () => {
-    cancelAnimationFrame(rafId);
-    clearTimeout(timeoutId);
-    card.removeEventListener('transitionend', listener);
-    cleanup();
-  };
-
-  // transition 和 height 分帧写入，保证浏览器能捕捉起始快照
-  rafId = requestAnimationFrame(() => {
-    card.style.transition = 'height 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
-    card.style.height = to + 'px';
-    listener = (e) => {
-      if (e.propertyName !== 'height') return;
-      card.removeEventListener('transitionend', listener);
-      clearTimeout(timeoutId);
-      cleanup();
-    };
-    timeoutId = setTimeout(() => {
-      card.removeEventListener('transitionend', listener);
-      cleanup();
-    }, 500);
-    card.addEventListener('transitionend', listener);
-  });
-}
-
 // ── Render ────────────────────────────────────────────────────────────────────
 
 function renderStats() {
@@ -366,7 +315,7 @@ async function submitRating(rating) {
 
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
-        if (data.stats) { state.stats = data.stats; state.progress = data.progress; renderStats(); }
+        if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
         prefetchNext();  // server has advanced, gets actual next-next word
       })
       .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));

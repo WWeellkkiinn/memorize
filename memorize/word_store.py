@@ -267,6 +267,15 @@ class WordStore:
             ).fetchone()
         return row["n"] if row else 0
 
+    def get_progress(self) -> dict:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS total,"
+                " SUM(CASE WHEN introduced_date IS NOT NULL THEN 1 ELSE 0 END) AS introduced"
+                " FROM cards"
+            ).fetchone()
+        return {"introduced": row["introduced"] or 0, "total": row["total"] or 0}
+
     # ── Review ────────────────────────────────────────────────────────────────
 
     def rate(self, word_id: int, rating: Rating) -> None:
