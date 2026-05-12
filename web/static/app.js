@@ -20,10 +20,12 @@ const state = {
   countdownSec: 3,
   countdownTimer: null,
   revealTimer: null,
+  animating: false, // prevents double-submit during transitions
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+const undoHint      = $('undo-hint');
 const card          = $('card');
 const wordPos       = $('word-pos');
 const wordText      = $('word-text');
@@ -306,6 +308,8 @@ function cardAnimate(name, duration, easing = 'ease') {
 }
 
 async function submitRating(rating) {
+  if (state.animating) return;
+  state.animating = true;
   const wordId = state.word.id;
   const btns = ratingRow.querySelectorAll('button');
   card.classList.add('loading');
@@ -315,24 +319,25 @@ async function submitRating(rating) {
     card.style.animation = '';
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
+    state.animating = false;
   }
 
   if (state.next) {
     // Optimistic path: show next word immediately, submit rating in background
-    await cardAnimate('cardExit', 80);
+    await cardAnimate('cardExitUp', 160, 'cubic-bezier(0.4, 0, 1, 1)');
     state.word      = state.next;
     state.intervals = state.next.intervals || null;
     state.next      = null;
     renderStats();
     setPhase(1);
     reset();
-    cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
+    cardAnimate('cardEnterFromBelow', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)')
       .then(() => { card.style.animation = ''; });
 
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
-        prefetchNext();  // server has advanced, gets actual next-next word
+        prefetchNext();
       })
       .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
 
@@ -343,7 +348,7 @@ async function submitRating(rating) {
     try {
       const [data] = await Promise.all([
         submitWithRetry(wordId, rating),
-        cardAnimate('cardExit', 80),
+        cardAnimate('cardExitUp', 160, 'cubic-bezier(0.4, 0, 1, 1)'),
       ]);
       state.word      = data.word;
       state.stats     = data.stats;
@@ -353,7 +358,7 @@ async function submitRating(rating) {
       renderStats();
       setPhase(1);
       reset();
-      await cardAnimate('cardEnter', 160, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
+      await cardAnimate('cardEnterFromBelow', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
       card.style.animation = '';
       prefetchNext();
     } catch (e) {
@@ -362,6 +367,84 @@ async function submitRating(rating) {
     }
   }
 }
+
+async function submitUndo() {
+  if (state.animating || state.phase !== 2) return;
+  state.animating = true;
+  card.classList.add('loading');
+  try {
+    const res = await fetch('/api/undo', { method: 'POST' });
+    const data = await res.json();
+    if (!data.word) {
+      // No undo available — snap back
+      card.classList.remove('loading');
+      state.animating = false;
+      return;
+    }
+    await cardAnimate('cardExitDown', 160, 'cubic-bezier(0.4, 0, 1, 1)');
+    state.word      = data.word;
+    state.stats     = data.stats;
+    state.progress  = data.progress;
+    state.intervals = data.intervals;
+    state.next      = null;
+    renderStats();
+    setPhase(1);
+    card.style.animation = '';
+    card.classList.remove('loading');
+    state.animating = false;
+    await cardAnimate('cardEnterFromAbove', 240, 'cubic-bezier(0.34, 1.56, 0.64, 1)');
+    card.style.animation = '';
+    prefetchNext();
+  } catch (e) {
+    card.style.animation = '';
+    card.classList.remove('loading');
+    state.animating = false;
+  }
+}
+
+// ── Swipe-down to undo ────────────────────────────────────────────────────────
+
+const UNDO_THRESHOLD = 80;
+let _swipeStartY = 0;
+let _swipeStartX = 0;
+let _swipeActive = false;
+
+card.addEventListener('touchstart', e => {
+  if (state.phase !== 2 || state.animating) return;
+  _swipeStartY = e.touches[0].clientY;
+  _swipeStartX = e.touches[0].clientX;
+  _swipeActive = false;
+}, { passive: true });
+
+card.addEventListener('touchmove', e => {
+  if (state.phase !== 2 || state.animating) return;
+  const dy = e.touches[0].clientY - _swipeStartY;
+  const dx = Math.abs(e.touches[0].clientX - _swipeStartX);
+  if (dy > 8 && dy > dx) {
+    e.preventDefault(); // block pull-to-refresh
+    _swipeActive = true;
+    const travel = Math.min(dy * 0.45, UNDO_THRESHOLD * 0.8);
+    card.style.transform = `translateY(${travel}px)`;
+    undoHint.style.opacity = Math.min(1, dy / UNDO_THRESHOLD).toFixed(2);
+  }
+}, { passive: false });
+
+card.addEventListener('touchend', e => {
+  undoHint.style.opacity = '0';
+  if (!_swipeActive) return;
+  _swipeActive = false;
+  const dy = e.changedTouches[0].clientY - _swipeStartY;
+  card.style.transform = '';
+  if (dy > UNDO_THRESHOLD) {
+    submitUndo();
+  }
+}, { passive: true });
+
+card.addEventListener('touchcancel', () => {
+  _swipeActive = false;
+  card.style.transform = '';
+  undoHint.style.opacity = '0';
+}, { passive: true });
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 

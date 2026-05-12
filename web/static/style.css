@@ -71,11 +71,35 @@ body {
 #card:active  { transform: scale(0.998); }
 #card.loading { pointer-events: none; }
 
-@keyframes cardExit {
-  to { transform: scale(0.95); opacity: 0; }
+@keyframes cardExitUp {
+  to { transform: translateY(-56px) scale(0.97); opacity: 0; }
 }
-@keyframes cardEnter {
-  from { transform: scale(0.95); opacity: 0; }
+@keyframes cardEnterFromBelow {
+  from { transform: translateY(56px) scale(0.97); opacity: 0; }
+}
+@keyframes cardExitDown {
+  to { transform: translateY(56px) scale(0.97); opacity: 0; }
+}
+@keyframes cardEnterFromAbove {
+  from { transform: translateY(-56px) scale(0.97); opacity: 0; }
+}
+
+/* ── Undo hint ──────────────────────────────────────────────────────────────── */
+#undo-hint {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(99, 102, 241, 0.9);
+  color: #fff;
+  font-size: 14px;
+  padding: 7px 18px;
+  border-radius: 20px;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
 }
 
 /* ── Card Header ───────────────────────────────────────────────────────────── */

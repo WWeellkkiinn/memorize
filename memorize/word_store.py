@@ -271,6 +271,34 @@ class WordStore:
             ).fetchone()
         return {"introduced": row["introduced"] or 0, "total": row["total"] or 0}
 
+    def get_card_snapshot(self, word_id: int) -> dict | None:
+        """Return raw card fields for snapshotting before rate()."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT fsrs_card, due, stability, reps FROM cards WHERE word_id=?", (word_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def undo_rate(self, word_id: int, snapshot: dict) -> None:
+        """Restore FSRS card state from snapshot (reverses one rate() call)."""
+        with self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "UPDATE cards SET fsrs_card=?, due=?, stability=?, reps=? WHERE word_id=?",
+                    (snapshot["fsrs_card"], snapshot["due"], snapshot["stability"], snapshot["reps"], word_id),
+                )
+                conn.execute(
+                    "DELETE FROM review_logs WHERE id = ("
+                    "  SELECT id FROM review_logs WHERE word_id=? ORDER BY id DESC LIMIT 1)",
+                    (word_id,),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+
     # ── Review ────────────────────────────────────────────────────────────────
 
     def rate(self, word_id: int, rating: Rating) -> None:

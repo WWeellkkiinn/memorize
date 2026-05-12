@@ -20,6 +20,7 @@ class WordScheduler:
         self._queue: deque[int] = deque()
         self._current_id: int | None = None
         self._peeked_word: dict | None = None  # cached to avoid extra DB read in _pick_next
+        self._undo_snapshot: dict | None = None
         self._fill_queue()
 
     @property
@@ -45,6 +46,9 @@ class WordScheduler:
 
     def rate(self, word_id: int, rating: Rating) -> None:
         """Apply FSRS rating and update the queue without a full DB rebuild."""
+        snap = self._store.get_card_snapshot(word_id)
+        if snap:
+            self._undo_snapshot = {"word_id": word_id, **snap}
         self._store.rate(word_id, rating)
         if self._current_id == word_id:
             self._current_id = None
@@ -61,6 +65,17 @@ class WordScheduler:
 
     def get_today_stats(self) -> dict:
         return self._store.get_today_stats()
+
+    def undo_last_rating(self) -> dict | None:
+        """Restore previous FSRS state and return the word for display."""
+        if not self._undo_snapshot:
+            return None
+        snap = self._undo_snapshot
+        self._undo_snapshot = None
+        self._store.undo_rate(snap["word_id"], snap)
+        self._current_id = snap["word_id"]
+        self._queue.appendleft(snap["word_id"])
+        return self._store.get_word(snap["word_id"])
 
     # ── Internal ─────────────────────────────────────────────────────────────
 

@@ -117,3 +117,16 @@ class RateRequest(BaseModel):
 def rate_word(body: RateRequest):
     app.state.scheduler.rate(body.word_id, Rating(body.rating))
     return _build_response(app.state.scheduler, app.state.store)
+
+
+@app.post("/api/undo")
+def undo_word():
+    word = app.state.scheduler.undo_last_rating()
+    if not word:
+        return {"word": None, "stats": None, "intervals": None, "progress": None}
+    word = dict(word)
+    word["stage"] = _compute_stage(word)
+    intervals = app.state.store.get_preview_intervals(word["id"])
+    stats = app.state.store.get_today_stats()
+    progress = app.state.store.get_progress()
+    return {"word": word, "stats": stats, "intervals": intervals, "progress": progress}
