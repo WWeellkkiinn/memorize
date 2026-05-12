@@ -314,25 +314,55 @@ async function fetchWord() {
 const EXIT_EASING  = 'cubic-bezier(0.4, 0, 1, 1)';
 const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-const KF_EXIT_LEFT  = [{ transform: 'none', opacity: 1 }, { transform: 'translateX(-100px) scale(0.97)', opacity: 0 }];
-const KF_ENTER_RIGHT= [{ transform: 'translateX(80px) scale(0.97)', opacity: 0 }, { transform: 'none', opacity: 1 }];
-
-function cancelCardAnims() {
-  card.getAnimations().forEach(a => a.cancel());
-}
-
-async function cardExit(keyframes, duration) {
-  cancelCardAnims();
-  const anim = card.animate(keyframes, { duration, easing: EXIT_EASING, fill: 'forwards' });
-  await anim.finished;
-  return anim;
-}
-
-async function cardEnter(keyframes, duration, exitAnim) {
-  if (exitAnim) exitAnim.cancel(); // drop forwards fill so enter starts clean
-  cancelCardAnims();
-  const anim = card.animate(keyframes, { duration, easing: ENTER_EASING });
-  await anim.finished;
+// Build phase-1 HTML for a word — used to pre-render next/prev card in #card-prev
+function buildNextCardHTML(word) {
+  if (!word) return '';
+  let wordHTML;
+  if (word.morphemes) {
+    const parts = word.morphemes.split('|').map(p => {
+      const idx = p.indexOf(':');
+      const text = idx >= 0 ? p.slice(0, idx) : p;
+      const type = idx >= 0 ? p.slice(idx + 1) : 'root';
+      const safeType = MORPHEME_TYPES.has(type) ? type : 'root';
+      return `<span class="morpheme-${safeType}">${escHtml(text)}</span>`;
+    });
+    wordHTML = parts.join('<span class="morpheme-sep">·</span>');
+  } else {
+    wordHTML = escHtml(word.word || '');
+  }
+  let parsed = [];
+  try { parsed = JSON.parse(word.examples || '[]'); } catch (_) {}
+  const wordRe = buildWordRegex(word.word);
+  const examplesHTML = parsed.slice(0, 2).map(ex =>
+    `<div class="example-item">` +
+    `<div class="example-en">${highlightWordHtml(ex.en, wordRe)}</div>` +
+    `<div class="example-zh invisible">${escHtml(ex.zh)}</div>` +
+    `</div>`
+  ).join('');
+  const stageColor = STAGE_COLORS[word.stage] || 'var(--text-muted)';
+  return (
+    `<div id="card-header">` +
+    `<span id="word-text">${wordHTML}</span>` +
+    `<div id="word-meta">` +
+    `<span id="word-pos">${escHtml(word.pos || '')}</span>` +
+    `<span id="word-phonetic">${word.phonetic ? '/' + escHtml(word.phonetic) + '/' : ''}</span>` +
+    `</div></div>` +
+    `<div id="answer-area">` +
+    `<div id="hint-area"><div id="hint-text">单击查看答案</div></div>` +
+    `<div id="definition" class="invisible">${escHtml(word.definition || '')}</div>` +
+    `</div>` +
+    `<div id="examples">${examplesHTML}</div>` +
+    `<div id="rating-row" class="invisible">` +
+    `<button class="rating-btn btn-again"><span class="btn-label">忘 了</span><span class="interval"></span></button>` +
+    `<button class="rating-btn btn-hard"><span class="btn-label">模 糊</span><span class="interval"></span></button>` +
+    `<button class="rating-btn btn-good"><span class="btn-label">记 得</span><span class="interval"></span></button>` +
+    `<button class="rating-btn btn-easy"><span class="btn-label">轻 松</span><span class="interval"></span></button>` +
+    `</div>` +
+    `<div id="stats-row">` +
+    `<span id="stat-stage" style="color:${stageColor}">${escHtml(word.stage || '')}</span>` +
+    `<span id="stat-progress"></span><span id="stat-counts"></span>` +
+    `</div>`
+  );
 }
 
 // ── Parallel card track helpers ───────────────────────────────────────────────
@@ -341,25 +371,26 @@ const CARD_GAP = 16;
 
 function getCardW() { return card.offsetWidth + CARD_GAP; }
 
-function prevOffScreen() {
-  return `translateX(${-getCardW()}px) translateY(-50%)`;
+function prevOffScreen(side = 'left') {
+  const sign = side === 'right' ? 1 : -1;
+  return `translateX(${sign * getCardW()}px) translateY(-50%)`;
 }
 
 function resetCardPositions() {
   card.getAnimations().forEach(a => a.cancel());
   cardPrev.getAnimations().forEach(a => a.cancel());
   card.style.transform = '';
-  cardPrev.style.transform = prevOffScreen();
+  cardPrev.style.transform = prevOffScreen('left');
 }
 
-function renderPrevCard(html) {
+function renderPrevCard(html, side = 'left') {
   cardPrev.getAnimations().forEach(a => a.cancel());
   if (!html) {
     cardPrev.style.visibility = 'hidden';
     cardPrev.innerHTML = '';
     return;
   }
-  const offScreen = prevOffScreen(); // read layout BEFORE DOM write to avoid forced reflow
+  const offScreen = prevOffScreen(side); // read layout BEFORE DOM write to avoid forced reflow
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
   cardPrev.style.transform = offScreen;
@@ -372,6 +403,8 @@ async function submitRating(rating) {
   card.classList.add('loading');
   ratingBtns.forEach(b => b.disabled = true);
 
+  const SLIDE_DUR = 240;
+
   const unlock = () => {
     card.classList.remove('loading');
     ratingBtns.forEach(b => b.disabled = false);
@@ -380,20 +413,25 @@ async function submitRating(rating) {
   };
 
   if (state.next) {
-    // Optimistic: show next word immediately, submit in background
-    const prevHTML  = card.innerHTML;                  // snapshot before content changes
-    const exitAnim = await cardExit(KF_EXIT_LEFT, 160);
-    state.prev      = state.word;                      // save for /api/undo
-    state.prevHTML  = prevHTML;
-    state.word      = state.next;
-    state.intervals = state.next.intervals || null;
-    state.next      = null;
-    renderStats();
-    setPhase(1);
-    renderPrevCard(state.prevHTML);
-    card.classList.remove('loading');
-    ratingBtns.forEach(b => b.disabled = false);
-    const enterDone = cardEnter(KF_ENTER_RIGHT, 240, exitAnim).then(unlock);
+    // Optimistic: parallel slide — both cards visible simultaneously
+    const prevHTML  = card.innerHTML;
+    const nextWord  = state.next;
+
+    // Pre-render next card off-screen RIGHT (read W before DOM write)
+    renderPrevCard(buildNextCardHTML(nextWord), 'right');
+    const W = getCardW();
+
+    // Both cards slide LEFT together (same rail)
+    const exitAnim = card.animate(
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
+      { duration: SLIDE_DUR, easing: EXIT_EASING, fill: 'forwards' }
+    );
+    const enterAnim = cardPrev.animate(
+      [{ transform: `translateX(${W}px) translateY(-50%)` }, { transform: 'translateX(0) translateY(-50%)' }],
+      { duration: SLIDE_DUR, easing: ENTER_EASING, fill: 'forwards' }
+    );
+
+    // Submit in background while animating
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
@@ -401,32 +439,72 @@ async function submitRating(rating) {
       })
       .catch(() => showToast('提交失败，请检查网络', () => doSubmit(wid, r)));
     doSubmit(wordId, rating);
-    await enterDone;
+
+    await Promise.all([exitAnim.finished, enterAnim.finished]);
+
+    // Invisible swap: set inline positions BEFORE canceling WAAPI fill so elements snap correctly
+    renderPrevCard(prevHTML, 'left'); // old card → off-screen LEFT (cancels enterAnim inside)
+    card.style.transform = '';        // #card target = center
+    exitAnim.cancel();                // #card snaps to center (fill removed → inline style wins)
+
+    // Update state and render new word into #card (now at 0)
+    state.prev      = state.word;
+    state.prevHTML  = prevHTML;
+    state.word      = nextWord;
+    state.intervals = nextWord.intervals || null;
+    state.next      = null;
+    renderStats();
+    setPhase(1);
+    unlock();
 
   } else {
-    // Fallback: wait for API
+    // Fallback (no peek data): exit left + wait for API + enter from right (single-card)
     try {
-      const [data, exitAnim] = await Promise.all([
+      const prevHTML = card.innerHTML;
+      const W = getCardW();
+      const [data] = await Promise.all([
         submitWithRetry(wordId, rating),
-        cardExit(KF_EXIT_LEFT, 160),
+        card.animate(
+          [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
+          { duration: SLIDE_DUR, easing: EXIT_EASING, fill: 'forwards' }
+        ).finished,
       ]);
-      const prevHTML  = card.innerHTML;                // snapshot before content changes
-      state.prev      = state.word;                    // save for /api/undo
+
+      if (!data.word) {
+        card.style.transform = '';
+        card.getAnimations().forEach(a => a.cancel());
+        unlock();
+        return;
+      }
+
+      // Snap card back to center, load new content
+      card.style.transform = '';
+      card.getAnimations().forEach(a => a.cancel());
+
+      state.prev      = state.word;
       state.prevHTML  = prevHTML;
       state.word      = data.word;
       state.stats     = data.stats;
       state.progress  = data.progress;
       state.intervals = data.intervals;
-      if (!data.word) { unlock(); return; }
+      state.next      = null;
       renderStats();
       setPhase(1);
-      renderPrevCard(state.prevHTML);
+      renderPrevCard(state.prevHTML, 'left');
       card.classList.remove('loading');
       ratingBtns.forEach(b => b.disabled = false);
-      await cardEnter(KF_ENTER_RIGHT, 240, exitAnim);
+
+      // Enter from right (single card)
+      await card.animate(
+        [{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }],
+        { duration: SLIDE_DUR, easing: ENTER_EASING }
+      ).finished;
+
       unlock();
       prefetchNext();
     } catch (e) {
+      card.style.transform = '';
+      card.getAnimations().forEach(a => a.cancel());
       unlock();
       showToast('提交失败，请检查网络', () => submitRating(rating));
     }
