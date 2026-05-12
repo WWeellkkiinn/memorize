@@ -151,7 +151,6 @@ body {
 
 #definition {
   font-size: 18px;
-  font-weight: 600;
   line-height: 1.7;
   color: var(--text);
   border-left: 3px solid var(--accent);
@@ -191,7 +190,6 @@ body {
 
 .example-zh {
   font-size: 17px;
-  font-weight: 600;
   color: var(--text);
   margin-top: 6px;
   line-height: 1.5;
@@ -244,7 +242,6 @@ body {
   padding-top: 10px;
   border-top: 1px solid var(--border);
   font-size: 16px;
-  font-weight: 600;
   color: var(--text-muted);
 }
 
@@ -309,6 +306,14 @@ body {
 
 #rating-row.revealing {
   animation: fadeReveal 0.28s ease-out both;
+}
+
+/* ── Mobile layout ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  body    { padding: 20px 8px 32px; }
+  #card   { padding: 20px 16px 16px; }
+  #word-text { font-size: 34px; }
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────── */
