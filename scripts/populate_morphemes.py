@@ -40,7 +40,7 @@ PREFIXES = sorted([
     "trans", "anti", "semi", "mono", "para", "post", "fore",
     "meta", "bene", "peri", "equi", "ambi", "over", "auto",
     "non", "mid", "mis", "mal", "out", "pre", "pro", "sub",
-    "sur", "uni", "neo", "dis", "per", "obs", "com", "con",
+    "sur", "uni", "neo", "dis", "per", "com", "con",
     "ob", "bi", "ad", "ab", "re", "en", "em", "un", "ex",
     "il", "im", "in", "ir", "de",
 ], key=lambda x: -len(x))
@@ -71,6 +71,17 @@ BOUND_ROOTS = {
     "solve", "solut", "pos", "pon", "pel", "puls", "sent",
     "sequ", "sect", "sist", "tain", "ten", "val", "ven", "vent",
     "voc", "vok", "vis", "vid",
+    # Greek roots
+    "logue",    # monologue, prologue — Greek logos (word)
+    "phor",     # metaphor — Greek pherein (carry)
+    "nomy",     # autonomy — Greek nomos (law)
+    "tonous",   # monotonous — Greek tonos (tone)
+    "biotic",   # antibiotic — Greek bios (life)
+    # Latin roots (additional)
+    "stant",    # constant, substantial — Latin stare (stand)
+    "stitut",   # institution — Latin statuere (set up)
+    "stitute",  # substitute, constitute — full form
+    "flict",    # conflict, inflict — Latin fligere (strike)
     # Extended for IELTS words blocked by NLTK gap
     "pret",     # interpret — Latin pretium (worth)
     "ference",  # circumference — Latin ferre (to carry)
@@ -104,6 +115,22 @@ WORD_DENYLIST = {
     "setting",       # sett is a badger burrow, not the root
     "nationalism",   # national should not be marked as root
     "nationality",   # same issue
+    # ad- false positives (here/dress/just are coincidental)
+    "adhere",        # ad+here misleads — not "to here"
+    "address",       # ad+dress misleads — not "to dress"
+    "adjust",        # ad+just misleads — not "to just"
+    # ab- false positives
+    "abridge",       # ab+ridge — ridge is coincidental
+    "abrasion",      # ab+rasion — rasion not teachable
+    # re- false positives
+    "resort",        # re+sort misleads — not "sort again"
+    "retail",        # re+tail misleads — not "tail again"
+    "revenue",       # re+venue misleads — not "venue again"
+    "revenge",       # re+venge — venge not teachable here
+    "reptile",       # re+ptile — nonsense
+    # other false positives
+    "desert",        # de+sert — sert here is coincidental
+    "missile",       # mis+sile — sile not a root
 }
 
 
