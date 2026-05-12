@@ -59,6 +59,9 @@ class WordScheduler:
             self._peeked_word = self._store.get_word(next_id) if next_id else None
         return self._peeked_word
 
+    def get_today_stats(self) -> dict:
+        return self._store.get_today_stats()
+
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _remove_from_queue(self, word_id: int) -> None:

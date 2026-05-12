@@ -36,8 +36,20 @@ class MemorizeApp:
         _setup_logging()
 
         self._config = load_config()
-        self._store = WordStore(DB_PATH)
-        self._scheduler = WordScheduler(self._store)
+
+        if self._config.mode not in ("local", "server"):
+            log.warning("Unknown mode %r in config, falling back to local", self._config.mode)
+        if self._config.mode == "server":
+            from memorize.remote_scheduler import RemoteScheduler
+            self._store = None
+            self._scheduler = RemoteScheduler(
+                self._config.server_url,
+                self._config.server_user,
+                self._config.server_pass,
+            )
+        else:
+            self._store = WordStore(DB_PATH)
+            self._scheduler = WordScheduler(self._store)
 
         self._qt = QApplication.instance() or QApplication(sys.argv)
         self._qt.setQuitOnLastWindowClosed(False)
@@ -75,7 +87,7 @@ class MemorizeApp:
 
     def on_hover_leave(self) -> None:
         self._hover_active = False
-        if self._config.passive_mode:
+        if self._config.passive_mode and self._store is not None:
             self._word_timer.start()
 
     def remember_bar_x(self, x: int) -> None:
@@ -99,12 +111,14 @@ class MemorizeApp:
 
     def _push_current_word(self) -> None:
         word = self._scheduler.current_word()
-        self._bridge.push_word(self._word_to_payload(word, self._store.get_today_stats()))
+        self._bridge.push_word(self._word_to_payload(word, self._scheduler.get_today_stats()))
         self._push_passive_word()
-        if self._config.passive_mode:
+        if self._config.passive_mode and self._store is not None:
             self._word_timer.start()
 
     def _push_passive_word(self) -> None:
+        if self._store is None:
+            return
         word = self._store.get_random_word(exclude_id=self._passive_word_id)
         if word:
             if self._passive_word_id is not None:
@@ -114,7 +128,7 @@ class MemorizeApp:
 
     def _advance_and_push(self) -> None:
         word = self._scheduler.advance()
-        self._bridge.push_word(self._word_to_payload(word, self._store.get_today_stats()))
+        self._bridge.push_word(self._word_to_payload(word, self._scheduler.get_today_stats()))
 
     @staticmethod
     def _word_stage(word: dict) -> str:
@@ -144,10 +158,10 @@ class MemorizeApp:
                 "wordStage": MemorizeApp._word_stage(word),
             }
         if stats:
-            payload["todayNew"]           = stats["newWords"]
-            payload["todayNewTotal"]      = stats["newTotal"]
-            payload["todayReviewed"]      = stats["reviewedWords"]
-            payload["todayReviewedTotal"] = stats["reviewedTotal"]
+            payload["todayNew"]           = stats.get("newWords", 0)
+            payload["todayNewTotal"]      = stats.get("newTotal", 0)
+            payload["todayReviewed"]      = stats.get("reviewedWords", 0)
+            payload["todayReviewedTotal"] = stats.get("reviewedTotal", 0)
         return payload
 
     def run(self) -> int:

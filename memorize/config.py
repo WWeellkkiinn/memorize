@@ -23,6 +23,10 @@ class Config:
     bar_x: int | None = None
     passive_mode: bool = True
     word_change_interval_sec: int = 10
+    mode: str = "local"        # "local" | "server"
+    server_url: str = ""
+    server_user: str = ""
+    server_pass: str = ""
 
 
 def load_config() -> Config:
@@ -44,6 +48,10 @@ def load_config() -> Config:
             word_change_interval_sec=max(5, int(
                 data.get("word_change_interval_sec", defaults.word_change_interval_sec)
             )),
+            mode=str(data.get("mode", defaults.mode)),
+            server_url=str(data.get("server_url", defaults.server_url)),
+            server_user=str(data.get("server_user", defaults.server_user)),
+            server_pass=str(data.get("server_pass", defaults.server_pass)),
         )
     except (TypeError, ValueError):
         logging.warning("config.json has invalid values, using defaults")
