@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&family=Lexend:wght@400;600;700&display=swap');
 
 :root {
   --bg:             #F3F4F8;
@@ -95,7 +95,7 @@ body {
 
 #word-text {
   display: block;
-  font-family: 'Lexend', "PingFang SC", sans-serif;
+  font-family: 'Lora', Georgia, serif;
   font-size: 40px;
   font-weight: 700;
   line-height: 1.1;
