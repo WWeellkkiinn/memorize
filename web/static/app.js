@@ -554,9 +554,11 @@ async function _commitSwipe() {
   const W = _cachedCardW || getCardW();
   const curDx = _curCardDx();
   const prevH = cardPrev.scrollHeight; // read before any style writes
+  const curH  = card.offsetHeight;     // read before any style writes
 
-  // Pin stage height (same frame as animation start — flex re-centers before first paint)
-  if (prevH > 0) cardStage.style.height = prevH + 'px';
+  // Pin to CURRENT card height — keeps top:50% on #card-prev unchanged during animation.
+  // We'll update the pin to prevH after the animation, once #card-prev is off-screen.
+  if (curH > 0) cardStage.style.height = curH + 'px';
 
   // Don't clear inline transforms — WAAPI first keyframes override them without flash risk
 
@@ -591,11 +593,14 @@ async function _commitSwipe() {
   }
 
   if (data && data.word) {
-    // Set inline positions before cancel so element snaps to these values
+    // Set inline positions before cancel so elements snap to these values
     card.style.transform = '';
     cardPrev.style.transform = prevOffScreen();
-    exitAnim.cancel();
-    enterAnim.cancel();
+    exitAnim.cancel();  // #card snaps to center
+    enterAnim.cancel(); // #card-prev snaps to off-screen left — top:50% jump now invisible
+
+    // Update pin to prevH before setPhase(1) so the content-height change doesn't flex-reflow
+    if (prevH > 0) cardStage.style.height = prevH + 'px';
 
     state.prev      = null;
     state.prevHTML  = null;
@@ -605,9 +610,9 @@ async function _commitSwipe() {
     state.intervals = data.intervals;
     state.next      = null;
     renderStats();
-    setPhase(1);          // same word as prevHTML → height ≈ pinned height
+    setPhase(1);          // card renders at prevH — stage already pinned to prevH, no reflow
     renderPrevCard(null);
-    cardStage.style.height = ''; // release: card natural height ≈ H_prev → no reflow
+    cardStage.style.height = ''; // release: card height = prevH = stage height → no jump
   } else {
     exitAnim.cancel(); enterAnim.cancel();
     cardStage.style.height = '';
