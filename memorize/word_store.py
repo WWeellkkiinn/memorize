@@ -68,7 +68,7 @@ _CREATE_IDX_DUE = "CREATE INDEX IF NOT EXISTS idx_cards_due ON cards(due)"
 
 # Shared SELECT fragment used by all word-listing queries
 _WORD_COLS = """
-    SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples,
+    SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples, w.morphemes,
            c.stability, c.reps, c.due
     FROM words w
     JOIN cards c ON c.word_id = w.id
@@ -119,10 +119,12 @@ class WordStore:
             card_cols = {r[1] for r in conn.execute("PRAGMA table_info(cards)")}
             if "last_seen_at" not in card_cols:
                 conn.execute("ALTER TABLE cards ADD COLUMN last_seen_at TEXT DEFAULT NULL")
-            # Migration: words.rank
+            # Migration: words.rank / words.morphemes
             word_cols = {r[1] for r in conn.execute("PRAGMA table_info(words)")}
             if "rank" not in word_cols:
                 conn.execute("ALTER TABLE words ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
+            if "morphemes" not in word_cols:
+                conn.execute("ALTER TABLE words ADD COLUMN morphemes TEXT DEFAULT NULL")
             conn.commit()
 
     # ── Insert ────────────────────────────────────────────────────────────────

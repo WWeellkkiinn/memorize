@@ -104,6 +104,20 @@ body {
   margin-bottom: 6px;
 }
 
+#word-morphemes {
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+  min-height: 1.4em;
+}
+
+.morpheme        { font-weight: 600; }
+.morpheme-prefix { color: var(--accent); }
+.morpheme-root,
+.morpheme-free   { color: var(--text); }
+.morpheme-bound  { color: var(--text-muted); }
+.morpheme-sep    { color: var(--text-muted); margin: 0 2px; font-weight: 400; }
+
 #word-meta {
   display: flex;
   align-items: center;
