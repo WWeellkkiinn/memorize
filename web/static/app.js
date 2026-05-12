@@ -560,14 +560,15 @@ async function _commitSwipe() {
 
   // Don't clear inline transforms — WAAPI first keyframes override them without flash risk
 
+  const RAIL_EASING = 'ease-in-out';
   const exitAnim = card.animate(
-    [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)`, opacity: 0.4 }],
-    { duration: 240, easing: EXIT_EASING, fill: 'forwards' }
+    [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)` }],
+    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
   );
   const enterAnim = cardPrev.animate(
     [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` },
      { transform: 'translateX(0) translateY(-50%)' }],
-    { duration: 240, easing: ENTER_EASING, fill: 'forwards' }
+    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
   );
 
   let data;
