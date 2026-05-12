@@ -71,6 +71,26 @@ BOUND_ROOTS = {
     "solve", "solut", "pos", "pon", "pel", "puls", "sent",
     "sequ", "sect", "sist", "tain", "ten", "val", "ven", "vent",
     "voc", "vok", "vis", "vid",
+    # Extended for IELTS words blocked by NLTK gap
+    "pret",     # interpret — Latin pretium (worth)
+    "ference",  # circumference — Latin ferre (to carry)
+    "ficial",   # superficial — Latin facies (surface)
+    "cend",     # transcend — Latin scandere (to climb)
+    "gress",    # transgress — Latin gradi (to step)
+    "cript",    # transcript — variant of script
+    "cosm",     # microcosm — Greek kosmos (world)
+    "rogate",   # interrogate — Latin rogare (to ask)
+    "mitt",     # intermittent — Latin mittere (to send)
+    "vagant",   # extravagant — Latin vagari (to wander)
+}
+
+# Manual splits for words with unusual morphology that rules can't handle cleanly
+WORD_ALLOWLIST: dict[str, str] = {
+    "multitude":    "multi:prefix|tude:root",       # multi (many) + -tude (state)
+    "superfluous":  "super:prefix|fluous:root",     # super + fluere (to flow)
+    "supersede":    "super:prefix|sede:root",       # super + sedere (to sit/yield)
+    "superstition": "super:prefix|stition:root",    # super + stare (to stand)
+    "transition":   "trans:prefix|ition:root",      # trans (across) + going
 }
 
 # Words whose surface morphology looks splittable but is etymologically
@@ -102,6 +122,8 @@ def segment(word: str) -> str | None:
 
     if w in WORD_DENYLIST:
         return None
+    if w in WORD_ALLOWLIST:
+        return WORD_ALLOWLIST[w]
 
     prefix = ""
     for p in PREFIXES:
