@@ -139,6 +139,47 @@ python install.py
 
 ---
 
+## 云端模式（可选）
+
+项目附带一个 FastAPI Web 服务端（`web/server.py`），可以部署到自己的服务器上，用浏览器或桌面端共用同一套复习进度。
+
+### 让桌面端接入云端服务器
+
+在 `%APPDATA%\memorize\config.json` 里加入以下字段：
+
+```json
+{
+  "mode": "server",
+  "server_url": "http://你的服务器IP:8881",
+  "server_user": "用户名",
+  "server_pass": "密码"
+}
+```
+
+重启应用后，单词和评分记录将直接读写服务器，本地不再使用 SQLite。
+
+- 不填 `mode` 或填 `"mode": "local"` 时照常使用本地数据库，无需网络。
+- 云端模式下，底部条被动轮词功能自动禁用（无本地词库可用）。
+
+### 部署服务端（Docker）
+
+```bash
+# 构建并启动
+docker compose up -d
+
+# 首次导入词库（进容器执行）
+docker compose exec memorize python scripts/import_words.py data/ielts.json
+```
+
+服务端鉴权通过环境变量配置，在项目根目录创建 `.env`：
+
+```
+AUTH_USER=你的用户名
+AUTH_PASS=你的密码
+```
+
+---
+
 ## 进阶：个性化记忆曲线
 
 用了一段时间、积累了几百条复习记录后，可以用你自己的数据重新拟合 FSRS 参数，让算法更贴合你的记忆规律：
@@ -166,10 +207,14 @@ memorize/
 ├── scripts/
 │   ├── import_words.py   # 导入单词表
 │   └── optimize.py       # 用个人复习记录优化 FSRS 参数（需 torch + pandas）
+├── web/
+│   ├── server.py         # FastAPI 服务端
+│   └── static/           # 网页前端
 └── memorize/
-    ├── config.py         # 配置
+    ├── config.py         # 配置（含云端模式字段）
     ├── word_store.py     # SQLite 词库
-    ├── scheduler.py      # FSRS 调度
+    ├── scheduler.py      # FSRS 调度（本地）
+    ├── remote_scheduler.py # HTTP 调度（云端模式）
     ├── qt_app.py         # 主程序
     └── ui/
         ├── bar.qml       # 界面
