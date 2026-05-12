@@ -37,7 +37,7 @@ body {
   color: var(--text);
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   min-height: 100dvh;
-  padding: 20px 16px 32px;
+  padding: 20px 8px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
