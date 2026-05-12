@@ -84,7 +84,6 @@ body {
 #card-prev {
   position: absolute;
   top: 0; left: 0; right: 0;
-  min-height: 100%;
   z-index: 0;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -98,22 +97,6 @@ body {
   overflow: hidden;
 }
 
-.prev-word {
-  font-family: 'Lora', Georgia, serif;
-  font-size: 36px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 14px;
-  line-height: 1.15;
-}
-
-.prev-def {
-  font-size: 17px;
-  line-height: 1.7;
-  color: var(--text);
-  border-left: 3px solid var(--accent);
-  padding-left: 14px;
-}
 
 /* ── Card Header ───────────────────────────────────────────────────────────── */
 

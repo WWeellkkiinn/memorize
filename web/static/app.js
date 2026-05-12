@@ -13,7 +13,8 @@ const STAGE_COLORS = {
 const state = {
   phase: 0,         // 0=loading, 1=self-test, 2=revealed
   word: null,
-  prev: null,       // previous word (for right-swipe undo preview)
+  prev: null,       // previous word dict (for /api/undo)
+  prevHTML: null,   // innerHTML snapshot of #card before last advance
   stats: null,
   progress: null,
   intervals: null,
@@ -289,7 +290,7 @@ async function fetchWord() {
     renderStats();
     if (!data.word) return;
     setPhase(1);
-    renderPrevCard(null);
+    renderPrevCard(null); // no prev on first load
     resetCardPositions();
     prefetchNext();
   } catch (e) {
@@ -341,14 +342,14 @@ function resetCardPositions() {
   cardPrev.style.transform = `translateX(${-getCardW()}px)`;
 }
 
-function renderPrevCard(word) {
-  if (!word) {
+function renderPrevCard(html) {
+  if (!html) {
     cardPrev.style.visibility = 'hidden';
+    cardPrev.innerHTML = '';
     return;
   }
+  cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
-  cardPrev.querySelector('.prev-word').textContent = word.word || '';
-  cardPrev.querySelector('.prev-def').textContent = word.definition || '';
 }
 
 async function submitRating(rating) {
@@ -368,14 +369,16 @@ async function submitRating(rating) {
 
   if (state.next) {
     // Optimistic: show next word immediately, submit in background
+    const prevHTML  = card.innerHTML;                  // snapshot before content changes
     const exitAnim = await cardExit(KF_EXIT_LEFT, 160);
-    state.prev      = state.word;                      // save for right-swipe undo
+    state.prev      = state.word;                      // save for /api/undo
+    state.prevHTML  = prevHTML;
     state.word      = state.next;
     state.intervals = state.next.intervals || null;
     state.next      = null;
     renderStats();
     setPhase(1);
-    renderPrevCard(state.prev);
+    renderPrevCard(state.prevHTML);
     card.classList.remove('loading');
     btns.forEach(b => b.disabled = false);
     const enterDone = cardEnter(KF_ENTER_RIGHT, 240, exitAnim).then(unlock);
@@ -395,7 +398,9 @@ async function submitRating(rating) {
         submitWithRetry(wordId, rating),
         cardExit(KF_EXIT_LEFT, 160),
       ]);
-      state.prev      = state.word;                    // save for right-swipe undo
+      const prevHTML  = card.innerHTML;                // snapshot before content changes
+      state.prev      = state.word;                    // save for /api/undo
+      state.prevHTML  = prevHTML;
       state.word      = data.word;
       state.stats     = data.stats;
       state.progress  = data.progress;
@@ -403,7 +408,7 @@ async function submitRating(rating) {
       if (!data.word) { unlock(); return; }
       renderStats();
       setPhase(1);
-      renderPrevCard(state.prev);
+      renderPrevCard(state.prevHTML);
       card.classList.remove('loading');
       btns.forEach(b => b.disabled = false);
       await cardEnter(KF_ENTER_RIGHT, 240, exitAnim);
@@ -474,7 +479,7 @@ async function _commitSwipe() {
     ]);
   } catch {
     exitAnim.cancel(); enterAnim.cancel();
-    resetCardPositions(); renderPrevCard(state.prev);
+    resetCardPositions(); renderPrevCard(state.prevHTML);
     state.animating = false;
     return;
   }
@@ -487,6 +492,7 @@ async function _commitSwipe() {
     enterAnim.cancel();
 
     state.prev      = null;
+    state.prevHTML  = null;
     state.word      = data.word;
     state.stats     = data.stats;
     state.progress  = data.progress;
@@ -497,7 +503,7 @@ async function _commitSwipe() {
     renderPrevCard(null);
   } else {
     exitAnim.cancel(); enterAnim.cancel();
-    resetCardPositions(); renderPrevCard(state.prev);
+    resetCardPositions(); renderPrevCard(state.prevHTML);
   }
   state.animating = false;
   prefetchNext();
