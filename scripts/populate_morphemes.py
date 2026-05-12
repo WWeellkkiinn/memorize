@@ -79,8 +79,8 @@ BOUND_ROOTS = {
     "biotic",   # antibiotic — Greek bios (life)
     # Latin roots (additional)
     "stant",    # constant, substantial — Latin stare (stand)
-    "stitut",   # institution — Latin statuere (set up)
-    "stitute",  # substitute, constitute — full form
+    "stitut",   # institution — Latin statuere (set up) — truncated form
+    "stitute",  # substitute, constitute — full form (both needed: different endings)
     "flict",    # conflict, inflict — Latin fligere (strike)
     # Extended for IELTS words blocked by NLTK gap
     "pret",     # interpret — Latin pretium (worth)
@@ -145,31 +145,46 @@ def _root_valid(root: str) -> bool:
 
 
 def segment(word: str) -> str | None:
-    w = word.lower()
+    original = word.lower()
 
-    if w in WORD_DENYLIST:
+    if original in WORD_DENYLIST:
         return None
-    if w in WORD_ALLOWLIST:
-        return WORD_ALLOWLIST[w]
+    if original in WORD_ALLOWLIST:
+        return WORD_ALLOWLIST[original]
 
+    # MIN_ROOT=4 is intentionally uniform across prefix lengths.
+    # Short prefixes (re/de/in) rely on WORD_DENYLIST to block false positives
+    # rather than a higher threshold, which would break valid splits like re+fine.
     prefix = ""
+    remaining = original
     for p in PREFIXES:
-        if w.startswith(p) and len(w) - len(p) >= MIN_ROOT:
+        if original.startswith(p) and len(original) - len(p) >= MIN_ROOT:
             prefix = p
-            w = w[len(p):]
+            remaining = original[len(p):]
             break
 
     suffix = ""
-    root = w
+    root = remaining
     for s in SUFFIXES:
-        if w.endswith(s) and len(w) - len(s) >= MIN_ROOT:
-            candidate = w[: -len(s)]
+        if remaining.endswith(s) and len(remaining) - len(s) >= MIN_ROOT:
+            candidate = remaining[: -len(s)]
             if _root_valid(candidate):
                 suffix = s
                 root = candidate
                 break
 
     if not _root_valid(root):
+        # Fallback: if a prefix was matched but root is invalid, try suffix-only
+        # on the original word. Handles cases where greedy longest prefix masks a
+        # valid suffix-only split.
+        # _root_valid only checks +e/+er variants; +ed/+ing/+s are intentionally
+        # excluded to avoid false positives from over-broad NLTK matches.
+        if prefix:
+            for s in SUFFIXES:
+                if original.endswith(s) and len(original) - len(s) >= MIN_ROOT:
+                    cand = original[: -len(s)]
+                    if _root_valid(cand):
+                        return f"{cand}:root|{s}:bound"
         return None
 
     if not prefix and not suffix:
@@ -221,7 +236,7 @@ def main() -> None:
             word_set = set(results)
             print("\n=== Target samples ===")
             for w in samples:
-                result = results.get(w) or segment(w)
+                result = results[w] if w in word_set else segment(w)
                 tag = "(not in list)" if w not in word_set else ""
                 print(f"  {w:30s} -> {result or '(no split)'} {tag}")
 
