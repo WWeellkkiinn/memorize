@@ -48,16 +48,40 @@ const toast         = $('toast');
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
-let _audio = null;
+let _audio = null;     // 当前词
+let _audioNext = null; // 下一张预加载
+let _audioPrev = null; // 上一张保留（撤销用）
 
-// word 传入时创建新音频对象并播放（自动播放）；不传时重播当前缓存（按钮重听）
+function _makeAudio(word) {
+  const a = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
+  a._word = word;
+  return a;
+}
+
+// word 传入时渲染新词（自动播放，优先复用预加载缓存）；不传时重播当前词
 function speakWord(word) {
   if (word) {
-    _audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
+    if (_audioNext?._word === word) {
+      _audioPrev = _audio;
+      _audio = _audioNext;
+      _audioNext = null;
+    } else if (_audioPrev?._word === word) {
+      _audio = _audioPrev;
+      _audioPrev = null;
+    } else {
+      _audioPrev = _audio;
+      _audio = _makeAudio(word);
+    }
   }
   if (!_audio) return;
   _audio.currentTime = 0;
   _audio.play().catch(() => {});
+}
+
+function preloadNextAudio(word) {
+  if (!word || _audioNext?._word === word) return;
+  _audioNext = _makeAudio(word);
+  _audioNext.load();
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -316,9 +340,11 @@ function prefetchNext() {
       if (data.word && data.word.id !== forWord) {
         state.next = { ...data.word, intervals: data.intervals };
         state.nextHTML = buildNextCardHTML(state.next); // pre-render off critical path
+        preloadNextAudio(state.next.word);
       } else {
         state.next = null; // peek returned no new word — clear any stale data
         state.nextHTML = null;
+        _audioNext = null;
       }
     })
     .catch(() => { clearTimeout(timeoutId); });
