@@ -524,12 +524,10 @@ async function submitRating(rating) {
 
     await Promise.all([exitAnim.finished, enterAnim.finished]);
 
-    // Invisible swap: set inline positions BEFORE canceling WAAPI fill so elements snap correctly
+    // Invisible swap: render new content while #card is still off-screen (fill:forwards holds it at X=-W)
     renderPrevCard(prevHTML, 'left'); // old card → off-screen LEFT (cancels enterAnim inside)
-    card.style.transform = '';        // #card target = center
-    exitAnim.cancel();                // #card snaps to center (fill removed → inline style wins)
 
-    // Update state and render new word into #card (now at 0)
+    // Update state and render new word BEFORE snapping to center — eliminates old-content flash
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
     state.word      = nextWord;
@@ -538,6 +536,9 @@ async function submitRating(rating) {
     state.nextHTML  = null;
     renderStats();
     setPhase(1);
+
+    card.style.transform = '';        // #card snaps to center already showing new content
+    exitAnim.cancel();                // removes fill:forwards so inline style wins
     // Re-enable UI; check _pendingUndo only if doSubmit already settled — otherwise doSubmit.then handles it
     card.classList.remove('loading');
     ratingBtns.forEach(b => b.disabled = false);
