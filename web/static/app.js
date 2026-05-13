@@ -68,6 +68,7 @@ function speakWord(word) {
     } else if (_audioPrev?._word === word) {
       _audio = _audioPrev;
       _audioPrev = null;
+      if (!_audio.paused) return; // already playing from early trigger in _commitSwipe
     } else {
       _audioPrev = _audio;
       _audio = _makeAudio(word);
@@ -614,6 +615,9 @@ async function _commitSwipe() {
   if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
   ++_submitGen; // invalidate any in-flight doSubmit — prevents post-undo stats overwrite
+
+  // Play prev word audio immediately in sync with animation — don't wait for API
+  if (_audioPrev) { _audioPrev.currentTime = 0; _audioPrev.play().catch(() => {}); }
 
   // Batch all layout reads before any writes to avoid forced reflow
   const W = _cachedCardW || getCardW();
