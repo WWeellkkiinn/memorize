@@ -62,7 +62,6 @@ function _makeAudio(word) {
 function speakWord(word) {
   if (word) {
     if (_audioNext?._word === word) {
-      _stopCurrent();
       _audioPrev = _audio;
       _audio = _audioNext;
       _audioNext = null;
@@ -71,7 +70,6 @@ function speakWord(word) {
       _audioPrev = null;
       if (!_audio.paused) return; // already playing from early trigger in _commitSwipe
     } else {
-      _stopCurrent();
       _audioPrev = _audio;
       _audio = _makeAudio(word);
     }
