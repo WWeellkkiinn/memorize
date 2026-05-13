@@ -407,6 +407,9 @@ const RAIL_EASING  = 'ease-in-out';
 function buildNextCardHTML(word) {
   if (!word) return '';
   const stageColor = STAGE_COLORS[word.stage] || 'var(--text-muted)';
+  const progressText = state.progress ? `${state.progress.introduced} / ${state.progress.total}` : '';
+  const s = state.stats;
+  const countsText = s ? `共${s.newTotal + s.reviewedTotal}次 | 新词${s.newWords} | 复习${s.reviewedWords}` : '';
   return (
     `<div id="card-header">` +
     `<span id="word-text">${buildMorphemeHTML(word)}</span>` +
@@ -428,7 +431,7 @@ function buildNextCardHTML(word) {
     `</div>` +
     `<div id="stats-row">` +
     `<span id="stat-stage" style="color:${stageColor}">${escHtml(word.stage || '')}</span>` +
-    `<span id="stat-progress"></span><span id="stat-counts"></span>` +
+    `<span id="stat-progress">${escHtml(progressText)}</span><span id="stat-counts">${escHtml(countsText)}</span>` +
     `</div>`
   );
 }
