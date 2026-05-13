@@ -73,8 +73,12 @@ class WordScheduler:
         snap = self._undo_snapshot
         self._undo_snapshot = None
         self._store.undo_rate(snap["word_id"], snap)
+        # Put the displaced word (B) back at queue front so it shows next after re-rating A.
+        # B was removed from queue when it was selected; _current_id still holds B's id here.
+        if self._current_id is not None and self._current_id != snap["word_id"]:
+            self._queue.appendleft(self._current_id)
         self._current_id = snap["word_id"]
-        self._queue.appendleft(snap["word_id"])
+        self._peeked_word = None  # invalidate stale preload — must re-peek after undo
         return self._store.get_word(snap["word_id"])
 
     # ── Internal ─────────────────────────────────────────────────────────────
