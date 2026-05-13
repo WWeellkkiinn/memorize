@@ -48,24 +48,18 @@ const toast         = $('toast');
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
-let _ttsVoice = null;
-function _loadVoice() {
-  const voices = speechSynthesis.getVoices();
-  _ttsVoice = voices.find(v => v.lang === 'en-US') ||
-              voices.find(v => v.lang.startsWith('en')) || null;
-}
-if (window.speechSynthesis) {
-  speechSynthesis.addEventListener('voiceschanged', _loadVoice);
-  _loadVoice();
+let _audio = null;
+
+function preloadAudio(word) {
+  if (!word) return;
+  _audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
+  _audio.load();
 }
 
-function speakWord(text) {
-  if (!text || !window.speechSynthesis) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  if (_ttsVoice) u.voice = _ttsVoice;
-  speechSynthesis.speak(u);
+function speakWord() {
+  if (!_audio) return;
+  _audio.currentTime = 0;
+  _audio.play().catch(() => {});
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -255,7 +249,7 @@ function renderWord() {
   definition.textContent = w.definition || '';
   examples.innerHTML     = buildExamplesHTML(w);
   renderIntervals();
-  speakWord(w.word);
+  preloadAudio(w.word);
 }
 
 function updateCountdownText() {
@@ -737,7 +731,7 @@ ratingRow.addEventListener('click', e => {
 
 speakBtn.addEventListener('click', e => {
   e.stopPropagation();
-  speakWord(state.word?.word);
+  speakWord();
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
