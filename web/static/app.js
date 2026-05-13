@@ -27,25 +27,15 @@ const state = {
 };
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
-const $ = id => document.getElementById(id);
-const cardStage     = $('card-stage');
-const cardPrev      = $('card-prev');
-const cardNext      = $('card-next');
-const card          = $('card');
-const wordPos       = $('word-pos');
-const wordText      = $('word-text');
-const wordPhone     = $('word-phonetic');
-const hintArea      = $('hint-area');
-const hintText      = $('hint-text');
-const definition    = $('definition');
-const examples      = $('examples');
-const ratingRow     = $('rating-row');
-const ratingBtns    = Array.from(ratingRow.querySelectorAll('button')); // cached once
-const speakBtn      = $('speak-btn');
-const statStage     = $('stat-stage');
-const statProgress  = $('stat-progress');
-const statCounts    = $('stat-counts');
-const toast         = $('toast');
+// Only the card-stage scaffold elements have ids; everything *inside* a card uses
+// classes so the three cards (prev/current/next) share one HTML template without
+// id collisions.
+const cardStage = document.getElementById('card-stage');
+const cardPrev  = document.getElementById('card-prev');
+const cardNext  = document.getElementById('card-next');
+const card      = document.getElementById('card');
+const toast     = document.getElementById('toast');
+const q = sel => card.querySelector(sel);
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -239,25 +229,31 @@ function renderStats() {
   const s = state.stats;
   const p = state.progress;
   if (w) {
-    statStage.textContent = w.stage || '';
-    statStage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
+    const stage = q('.stat-stage');
+    if (stage) {
+      stage.textContent = w.stage || '';
+      stage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
+    }
   }
   if (p) {
-    statProgress.textContent = `${p.introduced} / ${p.total}`;
+    const prog = q('.stat-progress');
+    if (prog) prog.textContent = `${p.introduced} / ${p.total}`;
   }
   if (s) {
-    const total = s.newTotal + s.reviewedTotal;
-    statCounts.textContent = `共${total}次 | 新词${s.newWords} | 复习${s.reviewedWords}`;
+    const counts = q('.stat-counts');
+    if (counts) counts.textContent = `共${s.newTotal + s.reviewedTotal}次 | 新词${s.newWords} | 复习${s.reviewedWords}`;
   }
 }
+
+const _intervalKeyByRating = { 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' };
 
 function renderIntervals() {
   if (!state.intervals) return;
   const iv = state.intervals;
-  $('int-again').textContent = formatInterval(iv.again);
-  $('int-hard').textContent  = formatInterval(iv.hard);
-  $('int-good').textContent  = formatInterval(iv.good);
-  $('int-easy').textContent  = formatInterval(iv.easy);
+  for (const [rating, key] of Object.entries(_intervalKeyByRating)) {
+    const el = q(`.rating-btn[data-rating="${rating}"] .interval`);
+    if (el) el.textContent = formatInterval(iv[key]);
+  }
 }
 
 function buildMorphemeHTML(word) {
@@ -287,20 +283,9 @@ function buildExamplesHTML(word) {
   ).join('');
 }
 
-function renderWord() {
-  const w = state.word;
-  if (!w) return;
-  wordPos.textContent    = w.pos || '';
-  wordPhone.textContent  = w.phonetic ? `/${w.phonetic}/` : '';
-  wordText.innerHTML     = buildMorphemeHTML(w);
-  definition.textContent = w.definition || '';
-  examples.innerHTML     = buildExamplesHTML(w);
-  renderIntervals();
-  speakWord(w.word);
-}
-
 function updateCountdownText() {
-  hintText.textContent = `单击查看答案，${state.countdownSec} 秒后自动揭示`;
+  const el = q('.hint-text');
+  if (el) el.textContent = `单击查看答案，${state.countdownSec} 秒后自动揭示`;
 }
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -319,6 +304,12 @@ function setPhase(n, skipReveal = false) {
   clearTimers();
   state.phase = n;
 
+  const hintArea  = q('.hint-area');
+  const definition = q('.definition');
+  const examples  = q('.examples');
+  const ratingRow = q('.rating-row');
+  if (!hintArea) return; // card has no content yet (error state)
+
   if (n === 1) {
     show(hintArea);
     visHide(definition);
@@ -326,8 +317,8 @@ function setPhase(n, skipReveal = false) {
     ratingRow.classList.remove('revealing');
     definition.classList.remove('revealing');
     visHide(ratingRow);
-    renderWord(); // replaces examples.innerHTML — querySelectorAll after to hit new nodes
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('revealing'));
+    renderIntervals();
     startCountdown();
   } else if (n === 2) {
     hide(hintArea);
@@ -364,7 +355,7 @@ function prefetchNext() {
       if (ctrl !== _prefetchCtrl) return; // stale — a newer prefetch superseded this one
       if (data.word && data.word.id !== forWord) {
         state.next = { ...data.word, intervals: data.intervals };
-        state.nextHTML = buildNextCardHTML(state.next); // pre-render off critical path
+        state.nextHTML = buildCardHTML(state.next); // pre-render off critical path
         // Only stage DOM when no slide animation is in flight — otherwise we'd yank
         // the entering cardNext mid-animation. submitRating cleanup re-stages on finish.
         if (!state.animating) renderNextCard(state.nextHTML);
@@ -387,18 +378,21 @@ async function fetchWord() {
     state.stats     = data.stats;
     state.progress  = data.progress;
     state.intervals = data.intervals;
+    if (!data.word) {
+      card.innerHTML = `<div class="hint-area"><div class="hint-text">暂无单词</div></div>`;
+      return;
+    }
+    card.innerHTML = buildCardHTML(state.word);
     renderStats();
-    if (!data.word) return;
     setPhase(1);
+    speakWord(state.word.word);
     renderPrevCard(null); // no prev on first load
     renderNextCard(null); // no next until prefetch lands
     resetCardPositions();
     prefetchNext();
   } catch (e) {
     state.phase = 0;
-    hintText.textContent = '加载失败，请刷新页面';
-    show(hintArea);
-    hide(ratingRow);
+    card.innerHTML = `<div class="hint-area"><div class="hint-text">加载失败，请刷新页面</div></div>`;
   }
 }
 
@@ -408,36 +402,39 @@ const EXIT_EASING  = 'cubic-bezier(0.4, 0, 1, 1)';
 const ENTER_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const RAIL_EASING  = 'ease-in-out';
 
-// Build phase-1 HTML for #card-prev. IDs are intentionally duplicated from #card —
-// CSS selectors apply equally (desired), and JS always uses startup-cached refs inside #card.
-function buildNextCardHTML(word) {
+// Single source of truth for card HTML — used for #card, #card-next, and (via
+// snapshot) #card-prev. All three cards therefore have byte-identical structure.
+// Produces phase-1 state (hint visible, definition/rating hidden); setPhase flips
+// classes for phase 2.
+function buildCardHTML(word) {
   if (!word) return '';
-  const stageColor = STAGE_COLORS[word.stage] || 'var(--text-muted)';
   const progressText = state.progress ? `${state.progress.introduced} / ${state.progress.total}` : '';
   const s = state.stats;
   const countsText = s ? `共${s.newTotal + s.reviewedTotal}次 | 新词${s.newWords} | 复习${s.reviewedWords}` : '';
   return (
-    `<div id="card-header">` +
-    `<span id="word-text">${buildMorphemeHTML(word)}</span>` +
-    `<div id="word-meta">` +
-    `<span id="word-pos">${escHtml(word.pos || '')}</span>` +
-    `<span id="word-phonetic">${word.phonetic ? '/' + escHtml(word.phonetic) + '/' : ''}</span>` +
-    `<span class="speak-btn-preview" aria-hidden="true">🔊</span>` +
-    `</div></div>` +
-    `<div id="answer-area">` +
-    `<div id="hint-area"><div id="hint-text">单击查看答案，3 秒后自动揭示</div></div>` +
-    `<div id="definition" class="invisible">${escHtml(word.definition || '')}</div>` +
+    `<div class="card-header">` +
+      `<span class="word-text">${buildMorphemeHTML(word)}</span>` +
+      `<div class="word-meta">` +
+        `<span class="word-pos">${escHtml(word.pos || '')}</span>` +
+        `<span class="word-phonetic">${word.phonetic ? '/' + escHtml(word.phonetic) + '/' : ''}</span>` +
+        `<span class="speak-btn" role="button" tabindex="0" aria-label="朗读">🔊</span>` +
+      `</div>` +
     `</div>` +
-    `<div id="examples">${buildExamplesHTML(word)}</div>` +
-    `<div id="rating-row" class="invisible">` +
-    `<button class="rating-btn btn-again"><span class="btn-label">忘 了</span><span class="interval"></span></button>` +
-    `<button class="rating-btn btn-hard"><span class="btn-label">模 糊</span><span class="interval"></span></button>` +
-    `<button class="rating-btn btn-good"><span class="btn-label">记 得</span><span class="interval"></span></button>` +
-    `<button class="rating-btn btn-easy"><span class="btn-label">轻 松</span><span class="interval"></span></button>` +
+    `<div class="answer-area">` +
+      `<div class="hint-area"><div class="hint-text">单击查看答案，3 秒后自动揭示</div></div>` +
+      `<div class="definition invisible">${escHtml(word.definition || '')}</div>` +
     `</div>` +
-    `<div id="stats-row">` +
-    `<span id="stat-stage" style="color:${stageColor}">${escHtml(word.stage || '')}</span>` +
-    `<span id="stat-progress">${escHtml(progressText)}</span><span id="stat-counts">${escHtml(countsText)}</span>` +
+    `<div class="examples">${buildExamplesHTML(word)}</div>` +
+    `<div class="rating-row invisible">` +
+      `<button class="rating-btn btn-again" data-rating="1"><span class="btn-label">忘 了</span><span class="interval"></span></button>` +
+      `<button class="rating-btn btn-hard"  data-rating="2"><span class="btn-label">模 糊</span><span class="interval"></span></button>` +
+      `<button class="rating-btn btn-good"  data-rating="3"><span class="btn-label">记 得</span><span class="interval"></span></button>` +
+      `<button class="rating-btn btn-easy"  data-rating="4"><span class="btn-label">轻 松</span><span class="interval"></span></button>` +
+    `</div>` +
+    `<div class="stats-row">` +
+      `<span class="stat-stage">${escHtml(word.stage || '')}</span>` +
+      `<span class="stat-progress">${escHtml(progressText)}</span>` +
+      `<span class="stat-counts">${escHtml(countsText)}</span>` +
     `</div>`
   );
 }
@@ -494,14 +491,12 @@ async function submitRating(rating) {
   state.animating = true;
   const wordId = state.word.id;
   const gen = ++_submitGen; // generation token — stale doSubmit retries check this
-  card.classList.add('loading');
-  ratingBtns.forEach(b => b.disabled = true);
+  card.classList.add('loading'); // CSS sets pointer-events:none — blocks all rating clicks
 
   const SLIDE_DUR = 240;
 
   const unlock = () => {
     card.classList.remove('loading');
-    ratingBtns.forEach(b => b.disabled = false);
     state.animating = false;
     if (_pendingUndo && state.prev) { _pendingUndo = false; _commitSwipe(); }
   };
@@ -547,13 +542,14 @@ async function submitRating(rating) {
 
     await Promise.all([exitAnim.finished, enterAnim.finished]);
 
-    // Render new content while #card is still off-screen, then snap to center.
+    // Snapshot old card content into #card-prev for undo, rebuild #card with new word.
     renderPrevCard(prevHTML, 'left');
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
     state.word      = nextWord;
     state.intervals = nextWord.intervals || null;
-    renderStats();
+    card.innerHTML  = buildCardHTML(state.word);
+    renderStats();  // applies stat-stage color via JS (CSP-safe) + refreshes any stats updated by doSubmit
     setPhase(1);
 
     card.style.transform = '';
@@ -562,7 +558,6 @@ async function submitRating(rating) {
     renderNextCard(state.nextHTML);
 
     card.classList.remove('loading');
-    ratingBtns.forEach(b => b.disabled = false);
     state.animating = false;
     if (_pendingUndo && state.prev && doSubmitSettled) { _pendingUndo = false; _commitSwipe(); }
 
@@ -583,7 +578,6 @@ async function submitRating(rating) {
         card.style.transform = '';
         card.getAnimations().forEach(a => a.cancel());
         card.classList.remove('loading');
-        ratingBtns.forEach(b => b.disabled = false);
         _pendingUndo = false;
         state.animating = false;
         showToast('没有更多单词了');
@@ -602,8 +596,10 @@ async function submitRating(rating) {
       state.intervals = data.intervals;
       state.next      = null;
       state.nextHTML  = null;
+      card.innerHTML  = buildCardHTML(state.word);
       renderStats();
       setPhase(1);
+      speakWord(state.word.word);
       renderPrevCard(state.prevHTML, 'left');
 
       // Enter from right (single card) — buttons stay locked until animation completes
@@ -739,9 +735,10 @@ async function _commitSwipe() {
     state.intervals = data.intervals;
     state.next      = null;
     state.nextHTML  = null;
+    card.innerHTML  = buildCardHTML(state.word);
     renderStats();
-    renderWord();
-    setPhase(2, true);
+    setPhase(2, true);            // undo lands on already-revealed state
+    speakWord(state.word.word);   // play audio for the restored word
     renderPrevCard(null);
     renderNextCard(null);
     cardStage.style.height = ''; // release: card height = prevH = stage height → no jump
@@ -802,26 +799,32 @@ card.addEventListener('touchcancel', () => {
 
 // ── Event listeners ───────────────────────────────────────────────────────────
 
-card.addEventListener('click', () => {
-  if (state.animating) return;
+// Event delegation: all interactive elements live inside #card and are recreated
+// on every advance/undo (via buildCardHTML). Listening on #card itself survives.
+card.addEventListener('click', e => {
+  if (state.animating || card.classList.contains('loading')) return;
+
+  const ratingBtn = e.target.closest('.rating-btn');
+  if (ratingBtn) {
+    if (state.phase !== 2 || !state.word) return;
+    submitRating(parseInt(ratingBtn.dataset.rating, 10));
+    return;
+  }
+
+  if (e.target.closest('.speak-btn')) {
+    speakWord();
+    return;
+  }
+
   if (state.phase === 1) setPhase(2);
 });
 
-ratingRow.addEventListener('click', e => {
-  e.stopPropagation();
-  const btn = e.target.closest('[data-rating]');
-  if (!btn || btn.disabled || card.classList.contains('loading')) return;
-  if (state.phase !== 2 || !state.word) return;
-  submitRating(parseInt(btn.dataset.rating, 10));
-});
-
-speakBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  speakWord();
-});
-
-speakBtn.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); speakWord(); }
+card.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  if (e.target.closest('.speak-btn')) {
+    e.preventDefault();
+    speakWord();
+  }
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

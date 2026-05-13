@@ -10,58 +10,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=53">
+  <link rel="stylesheet" href="/static/style.css?v=54">
 </head>
 <body>
   <div id="toast" class="hidden"></div>
   <div id="card-stage">
   <div id="card-prev" aria-hidden="true"></div>
   <div id="card-next" aria-hidden="true"></div>
-  <div id="card">
-    <div id="card-header">
-      <span id="word-text"></span>
-      <div id="word-meta">
-        <span id="word-pos"></span>
-        <span id="word-phonetic"></span>
-        <span id="speak-btn" role="button" tabindex="0" aria-label="朗读">🔊</span>
-      </div>
-    </div>
-
-    <div id="answer-area">
-      <div id="hint-area" class="hidden">
-        <div id="hint-text">单击查看答案，3 秒后自动揭示</div>
-      </div>
-      <div id="definition" class="invisible"></div>
-    </div>
-    <div id="examples"></div>
-
-    <div id="rating-row">
-      <button class="rating-btn btn-again" data-rating="1">
-        <span class="btn-label">忘 了</span>
-        <span class="interval" id="int-again"></span>
-      </button>
-      <button class="rating-btn btn-hard" data-rating="2">
-        <span class="btn-label">模 糊</span>
-        <span class="interval" id="int-hard"></span>
-      </button>
-      <button class="rating-btn btn-good" data-rating="3">
-        <span class="btn-label">记 得</span>
-        <span class="interval" id="int-good"></span>
-      </button>
-      <button class="rating-btn btn-easy" data-rating="4">
-        <span class="btn-label">轻 松</span>
-        <span class="interval" id="int-easy"></span>
-      </button>
-    </div>
-
-    <div id="stats-row">
-      <span id="stat-stage"></span>
-      <span id="stat-progress"></span>
-      <span id="stat-counts"></span>
-    </div>
-  </div>
+  <div id="card"></div>
 
   </div><!-- #card-stage -->
-  <script src="/static/app.js?v=52"></script>
+  <script src="/static/app.js?v=53"></script>
 </body>
 </html>
