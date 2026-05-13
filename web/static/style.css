@@ -44,7 +44,7 @@ body {
   justify-content: center;
 }
 
-/* ── Card stage (positions current + prev card on a shared horizontal track) ── */
+/* ── Card stage (positions current + prev/next cards on a shared horizontal track) ── */
 
 #card-stage {
   width: 100%;
