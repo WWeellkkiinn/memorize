@@ -132,7 +132,7 @@ body {
 
 #word-meta {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 6px;
   font-size: 18px;
   color: var(--text-muted);
@@ -160,6 +160,13 @@ body {
   user-select: none;
 }
 #speak-btn:active { opacity: 1; }
+
+.speak-btn-preview {
+  margin-left: auto;
+  font-size: 18px;
+  opacity: 0.6;
+  pointer-events: none;
+}
 
 /* ── Answer Area ───────────────────────────────────────────────────────────── */
 

@@ -58,21 +58,29 @@ function _makeAudio(word) {
   return a;
 }
 
+// 释放 Audio 对象并取消未完成的网络请求
+function _evictAudio(a) { if (a) a.src = ''; }
+
 // word 传入时渲染新词（自动播放，优先复用预加载缓存）；不传时重播当前词
 function speakWord(word) {
   if (word) {
     if (_audioNext?._word === word) {
+      _evictAudio(_audioPrev);     // 丢弃两步前的音频
       _audioPrev = _audio;
       _audio = _audioNext;
       _audioNext = null;
     } else if (_audioPrev?._word === word) {
       _audio = _audioPrev;
       _audioPrev = null;
-      if (!_audio.paused) return; // already playing from early trigger in _commitSwipe
+      if (!_audio.paused && !_audio.ended) return; // already playing from early trigger
     } else {
+      _evictAudio(_audioPrev);     // 丢弃两步前的音频
       _audioPrev = _audio;
       _audio = _makeAudio(word);
     }
+  } else if (_audio?._word !== state.word?.word) {
+    // no-arg replay but _audio is stale (mid-transition) — rebuild on demand
+    if (state.word?.word) _audio = _makeAudio(state.word.word);
   }
   if (!_audio) return;
   _audio.currentTime = 0;
@@ -84,7 +92,9 @@ function _stopCurrent() {
 }
 
 function preloadNextAudio(word) {
-  if (!word || _audioNext?._word === word) return;
+  if (!word) { _evictAudio(_audioNext); _audioNext = null; return; }
+  if (_audioNext?._word === word) return;
+  _evictAudio(_audioNext);
   _audioNext = _makeAudio(word);
   _audioNext.load();
 }
@@ -394,6 +404,7 @@ function buildNextCardHTML(word) {
     `<div id="word-meta">` +
     `<span id="word-pos">${escHtml(word.pos || '')}</span>` +
     `<span id="word-phonetic">${word.phonetic ? '/' + escHtml(word.phonetic) + '/' : ''}</span>` +
+    `<span class="speak-btn-preview" aria-hidden="true">🔊</span>` +
     `</div></div>` +
     `<div id="answer-area">` +
     `<div id="hint-area"><div id="hint-text">单击查看答案</div></div>` +
@@ -619,6 +630,7 @@ async function _commitSwipe() {
   if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
   ++_submitGen; // invalidate any in-flight doSubmit — prevents post-undo stats overwrite
+  _evictAudio(_audioNext); _audioNext = null; // undo resets the queue; stale preload is wrong
 
   // Play prev word audio immediately in sync with animation — don't wait for API
   _stopCurrent();
@@ -765,6 +777,10 @@ ratingRow.addEventListener('click', e => {
 speakBtn.addEventListener('click', e => {
   e.stopPropagation();
   speakWord();
+});
+
+speakBtn.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); speakWord(); }
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
