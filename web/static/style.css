@@ -169,6 +169,7 @@ body {
 
 .speak-btn-preview {
   margin-left: auto;
+  padding: 4px 8px;
   font-size: 18px;
   opacity: 0.6;
   pointer-events: none;
