@@ -17,7 +17,6 @@ const state = {
   prevHTML: null,   // innerHTML snapshot of #card before last advance
   stats: null,
   progress: null,
-  intervals: null,
   next: null,       // pre-fetched next word
   nextHTML: null,   // pre-rendered HTML for next word (built in prefetchNext)
   countdownSec: 3,
@@ -100,14 +99,6 @@ function preloadNextAudio(word) {
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
-
-function formatInterval(days) {
-  if (days <= 1)   return '1天';
-  if (days < 7)    return days + '天';
-  if (days < 30)   return Math.round(days / 7) + '周';
-  if (days < 365)  return Math.round(days / 30) + '个月';
-  return (days / 365).toFixed(1) + '年';
-}
 
 function show(el)    { el.classList.remove('hidden'); el.classList.remove('invisible'); }
 function hide(el)    { el.classList.add('hidden'); }
@@ -245,17 +236,6 @@ function renderStats() {
   }
 }
 
-const _intervalKeyByRating = { 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' };
-
-function renderIntervals() {
-  if (!state.intervals) return;
-  const iv = state.intervals;
-  for (const [rating, key] of Object.entries(_intervalKeyByRating)) {
-    const el = q(`.rating-btn[data-rating="${rating}"] .interval`);
-    if (el) el.textContent = formatInterval(iv[key]);
-  }
-}
-
 function buildMorphemeHTML(word) {
   if (word.morphemes) {
     const parts = word.morphemes.split('|').map(p => {
@@ -318,7 +298,6 @@ function setPhase(n, skipReveal = false) {
     definition.classList.remove('revealing');
     visHide(ratingRow);
     examples.querySelectorAll('.example-zh').forEach(el => el.classList.remove('revealing'));
-    renderIntervals();
     startCountdown();
   } else if (n === 2) {
     hide(hintArea);
@@ -377,7 +356,6 @@ async function fetchWord() {
     state.word      = data.word;
     state.stats     = data.stats;
     state.progress  = data.progress;
-    state.intervals = data.intervals;
     if (!data.word) {
       card.innerHTML = `<div class="hint-area"><div class="hint-text">暂无单词</div></div>`;
       return;
@@ -426,10 +404,10 @@ function buildCardHTML(word) {
     `</div>` +
     `<div class="examples">${buildExamplesHTML(word)}</div>` +
     `<div class="rating-row invisible">` +
-      `<button class="rating-btn btn-again" data-rating="1"><span class="btn-label">忘 了</span><span class="interval"></span></button>` +
-      `<button class="rating-btn btn-hard"  data-rating="2"><span class="btn-label">模 糊</span><span class="interval"></span></button>` +
-      `<button class="rating-btn btn-good"  data-rating="3"><span class="btn-label">记 得</span><span class="interval"></span></button>` +
-      `<button class="rating-btn btn-easy"  data-rating="4"><span class="btn-label">轻 松</span><span class="interval"></span></button>` +
+      `<button class="rating-btn btn-again" data-rating="1">忘 了</button>` +
+      `<button class="rating-btn btn-hard"  data-rating="2">模 糊</button>` +
+      `<button class="rating-btn btn-good"  data-rating="3">记 得</button>` +
+      `<button class="rating-btn btn-easy"  data-rating="4">轻 松</button>` +
     `</div>` +
     `<div class="stats-row">` +
       `<span class="stat-stage">${escHtml(word.stage || '')}</span>` +
@@ -445,9 +423,9 @@ const CARD_GAP = 16;
 
 function getCardW() { return card.offsetWidth + CARD_GAP; }
 
-function prevOffScreen(side = 'left', w = null) {
+function offScreen(side) {
   const sign = side === 'right' ? 1 : -1;
-  return `translateX(${sign * (w ?? getCardW())}px) translateY(-50%)`;
+  return `translateX(${sign * getCardW()}px) translateY(-50%)`;
 }
 
 function resetCardPositions() {
@@ -455,21 +433,21 @@ function resetCardPositions() {
   cardPrev.getAnimations().forEach(a => a.cancel());
   cardNext.getAnimations().forEach(a => a.cancel());
   card.style.transform = '';
-  cardPrev.style.transform = prevOffScreen('left');
-  cardNext.style.transform = prevOffScreen('right');
+  cardPrev.style.transform = offScreen('left');
+  cardNext.style.transform = offScreen('right');
 }
 
-function renderPrevCard(html, side = 'left', w = null) {
+function renderPrevCard(html, side = 'left') {
   cardPrev.getAnimations().forEach(a => a.cancel());
   if (!html) {
     cardPrev.style.visibility = 'hidden';
     cardPrev.innerHTML = '';
     return;
   }
-  const offScreen = prevOffScreen(side, w); // read layout BEFORE DOM write to avoid forced reflow
+  const t = offScreen(side); // measure before innerHTML write
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
-  cardPrev.style.transform = offScreen;
+  cardPrev.style.transform = t;
 }
 
 // Park next card off-screen right, fully rendered in DOM so layout/font metrics
@@ -483,7 +461,7 @@ function renderNextCard(html) {
   }
   cardNext.innerHTML = html;
   cardNext.style.visibility = '';
-  cardNext.style.transform = prevOffScreen('right');
+  cardNext.style.transform = offScreen('right');
 }
 
 async function submitRating(rating) {
@@ -491,7 +469,7 @@ async function submitRating(rating) {
   state.animating = true;
   const wordId = state.word.id;
   const gen = ++_submitGen; // generation token — stale doSubmit retries check this
-  card.classList.add('loading'); // CSS sets pointer-events:none — blocks all rating clicks
+  card.classList.add('loading'); // belt + suspenders: CSS blocks pointer-events; click handler also checks this
 
   const SLIDE_DUR = 240;
 
@@ -525,7 +503,7 @@ async function submitRating(rating) {
     );
 
     let doSubmitSettled = false;
-    const doSubmit = (wid, r) => submitWithRetry(wid, r)
+    const doSubmit = () => submitWithRetry(wordId, rating)
       .then(data => {
         doSubmitSettled = true;
         if (gen !== _submitGen) return;
@@ -536,9 +514,9 @@ async function submitRating(rating) {
       .catch(() => {
         doSubmitSettled = true;
         if (gen !== _submitGen) return;
-        showToast('提交失败，请检查网络', () => doSubmit(wid, r));
+        showToast('提交失败，请检查网络', doSubmit);
       });
-    doSubmit(wordId, rating);
+    doSubmit();
 
     await Promise.all([exitAnim.finished, enterAnim.finished]);
 
@@ -547,7 +525,6 @@ async function submitRating(rating) {
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
     state.word      = nextWord;
-    state.intervals = nextWord.intervals || null;
     card.innerHTML  = buildCardHTML(state.word);
     renderStats();  // applies stat-stage color via JS (CSP-safe) + refreshes any stats updated by doSubmit
     setPhase(1);
@@ -593,7 +570,6 @@ async function submitRating(rating) {
       state.word      = data.word;
       state.stats     = data.stats;
       state.progress  = data.progress;
-      state.intervals = data.intervals;
       state.next      = null;
       state.nextHTML  = null;
       card.innerHTML  = buildCardHTML(state.word);
@@ -719,7 +695,7 @@ async function _commitSwipe() {
   if (data && data.word) {
     // Set inline positions before cancel so elements snap to these values
     card.style.transform = '';
-    cardPrev.style.transform = prevOffScreen();
+    cardPrev.style.transform = offScreen('left');
     exitAnim.cancel();  // #card snaps to center
     enterAnim.cancel(); // #card-prev snaps to off-screen left — top:50% jump now invisible
 
@@ -732,7 +708,6 @@ async function _commitSwipe() {
     state.word      = data.word;
     state.stats     = data.stats;
     state.progress  = data.progress;
-    state.intervals = data.intervals;
     state.next      = null;
     state.nextHTML  = null;
     card.innerHTML  = buildCardHTML(state.word);
@@ -804,17 +779,13 @@ card.addEventListener('touchcancel', () => {
 card.addEventListener('click', e => {
   if (state.animating || card.classList.contains('loading')) return;
 
-  const ratingBtn = e.target.closest('.rating-btn');
-  if (ratingBtn) {
+  const hit = e.target.closest('.rating-btn, .speak-btn');
+  if (hit?.classList.contains('rating-btn')) {
     if (state.phase !== 2 || !state.word) return;
-    submitRating(parseInt(ratingBtn.dataset.rating, 10));
+    submitRating(parseInt(hit.dataset.rating, 10));
     return;
   }
-
-  if (e.target.closest('.speak-btn')) {
-    speakWord();
-    return;
-  }
+  if (hit) { speakWord(); return; }
 
   if (state.phase === 1) setPhase(2);
 });

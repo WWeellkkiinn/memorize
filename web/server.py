@@ -85,6 +85,15 @@ async def basic_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # frame-ancestors only takes effect via HTTP header, not <meta> — block clickjacking.
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 

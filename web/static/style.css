@@ -52,19 +52,15 @@ body {
   position: relative;
 }
 
-/* ── Card ──────────────────────────────────────────────────────────────────── */
+/* ── Card shell (shared geometry for current + parked cards) ───────────────── */
 
-#card {
-  width: 100%;
-  position: relative;
-  z-index: 1;
+#card,
+#card-prev,
+#card-next {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 28px 24px 20px;
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
   box-shadow:
     0 0 0 1px rgba(99, 102, 241, 0.04) inset,
     0 4px 24px rgba(0, 0, 0, 0.08),
@@ -74,31 +70,26 @@ body {
     rgba(99, 102, 241, 0.025) 0%,
     transparent 60px
   );
+}
+
+#card {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
   will-change: transform, opacity;
 }
 
 #card.loading { pointer-events: none; }
 
-/* ── Off-stage cards (parked left for undo, parked right for forward) ───────── */
 #card-prev,
 #card-next {
   position: absolute;
   top: 50%; left: 0; right: 0;
   z-index: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 28px 24px 20px;
-  box-shadow:
-    0 0 0 1px rgba(99, 102, 241, 0.04) inset,
-    0 4px 24px rgba(0, 0, 0, 0.08),
-    0 1px 4px rgba(0, 0, 0, 0.04);
-  background-image: linear-gradient(
-    to bottom,
-    rgba(99, 102, 241, 0.025) 0%,
-    transparent 60px
-  );
   pointer-events: none;
   will-change: transform;
 }
@@ -269,10 +260,7 @@ body {
   transition: transform 0.1s ease;
 }
 
-.rating-btn:active   { transform: scale(0.95); }
-.rating-btn:disabled { opacity: 0.45; }
-
-.interval { display: none; }
+.rating-btn:active { transform: scale(0.95); }
 
 .btn-again { background: var(--btn-again-bg); border: 1px solid var(--btn-again-bd); }
 .btn-hard  { background: var(--btn-hard-bg);  border: 1px solid var(--btn-hard-bd);  }
