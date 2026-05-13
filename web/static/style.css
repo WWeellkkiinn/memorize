@@ -163,7 +163,7 @@ body {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-#speak-btn svg { width: 24px; height: 24px; display: block; }
+#speak-btn svg { width: 18px; height: 18px; display: block; }
 #speak-btn:active { opacity: 1; color: var(--accent); }
 
 /* ── Answer Area ───────────────────────────────────────────────────────────── */
