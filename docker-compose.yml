@@ -2,7 +2,7 @@ services:
   memorize:
     build: .
     ports:
-      - "127.0.0.1:8881:8881"
+      - "8881:8881"
     volumes:
       - memorize-db:/data/memorize
     env_file: .env
