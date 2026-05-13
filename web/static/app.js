@@ -83,7 +83,13 @@ function speakWord(word) {
     if (state.word?.word) _audio = _makeAudio(state.word.word);
   }
   if (!_audio) return;
-  _audio.currentTime = 0;
+  if (_audio.ended) {
+    // Some Android browsers won't replay an ended audio — recreate it
+    const w = _audio._word;
+    _audio = _makeAudio(w);
+  } else {
+    _audio.currentTime = 0;
+  }
   _audio.play().catch(() => {});
 }
 
