@@ -40,6 +40,7 @@ const definition    = $('definition');
 const examples      = $('examples');
 const ratingRow     = $('rating-row');
 const ratingBtns    = Array.from(ratingRow.querySelectorAll('button')); // cached once
+const speakBtn      = $('speak-btn');
 const statStage     = $('stat-stage');
 const statProgress  = $('stat-progress');
 const statCounts    = $('stat-counts');
@@ -732,6 +733,11 @@ ratingRow.addEventListener('click', e => {
   if (!btn || btn.disabled || card.classList.contains('loading')) return;
   if (state.phase !== 2 || !state.word) return;
   submitRating(parseInt(btn.dataset.rating, 10));
+});
+
+speakBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  speakWord(state.word?.word);
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

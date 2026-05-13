@@ -149,6 +149,22 @@ body {
   opacity: 0.5;
 }
 
+#speak-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  margin-left: auto;
+  color: var(--text-muted);
+  opacity: 0.55;
+  display: flex;
+  align-items: center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#speak-btn svg { width: 20px; height: 20px; }
+#speak-btn:active { opacity: 1; color: var(--accent); }
+
 /* ── Answer Area ───────────────────────────────────────────────────────────── */
 
 #answer-area {
