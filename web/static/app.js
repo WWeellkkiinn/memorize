@@ -45,6 +45,28 @@ const statProgress  = $('stat-progress');
 const statCounts    = $('stat-counts');
 const toast         = $('toast');
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+
+let _ttsVoice = null;
+function _loadVoice() {
+  const voices = speechSynthesis.getVoices();
+  _ttsVoice = voices.find(v => v.lang === 'en-US') ||
+              voices.find(v => v.lang.startsWith('en')) || null;
+}
+if (window.speechSynthesis) {
+  speechSynthesis.addEventListener('voiceschanged', _loadVoice);
+  _loadVoice();
+}
+
+function speakWord(text) {
+  if (!text || !window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  if (_ttsVoice) u.voice = _ttsVoice;
+  speechSynthesis.speak(u);
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function formatInterval(days) {
@@ -232,6 +254,7 @@ function renderWord() {
   definition.textContent = w.definition || '';
   examples.innerHTML     = buildExamplesHTML(w);
   renderIntervals();
+  speakWord(w.word);
 }
 
 function updateCountdownText() {
