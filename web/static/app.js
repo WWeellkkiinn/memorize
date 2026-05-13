@@ -62,6 +62,7 @@ function _makeAudio(word) {
 function speakWord(word) {
   if (word) {
     if (_audioNext?._word === word) {
+      _stopCurrent();
       _audioPrev = _audio;
       _audio = _audioNext;
       _audioNext = null;
@@ -70,6 +71,7 @@ function speakWord(word) {
       _audioPrev = null;
       if (!_audio.paused) return; // already playing from early trigger in _commitSwipe
     } else {
+      _stopCurrent();
       _audioPrev = _audio;
       _audio = _makeAudio(word);
     }
@@ -77,6 +79,10 @@ function speakWord(word) {
   if (!_audio) return;
   _audio.currentTime = 0;
   _audio.play().catch(() => {});
+}
+
+function _stopCurrent() {
+  if (_audio && !_audio.paused) _audio.pause();
 }
 
 function preloadNextAudio(word) {
@@ -617,6 +623,7 @@ async function _commitSwipe() {
   ++_submitGen; // invalidate any in-flight doSubmit — prevents post-undo stats overwrite
 
   // Play prev word audio immediately in sync with animation — don't wait for API
+  _stopCurrent();
   if (_audioPrev) { _audioPrev.currentTime = 0; _audioPrev.play().catch(() => {}); }
 
   // Batch all layout reads before any writes to avoid forced reflow
