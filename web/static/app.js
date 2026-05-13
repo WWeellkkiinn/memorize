@@ -19,6 +19,7 @@ const state = {
   progress: null,
   intervals: null,
   next: null,       // pre-fetched next word
+  nextHTML: null,   // pre-rendered HTML for next word (built in prefetchNext)
   countdownSec: 3,
   countdownTimer: null,
   revealTimer: null,
@@ -284,14 +285,23 @@ function setPhase(n, skipReveal = false) {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+let _prefetchCtrl = null;
+
 function prefetchNext() {
+  if (_prefetchCtrl) _prefetchCtrl.abort();
+  _prefetchCtrl = new AbortController();
+  const ctrl = _prefetchCtrl;
   const forWord = state.word?.id;
-  fetch('/api/peek').then(r => r.json()).then(data => {
-    // Ignore stale result: server hasn't advanced yet, returned current word
-    if (data.word && data.word.id !== forWord) {
-      state.next = { ...data.word, intervals: data.intervals };
-    }
-  }).catch(() => {});
+  fetch('/api/peek', { signal: ctrl.signal })
+    .then(r => r.json())
+    .then(data => {
+      if (ctrl !== _prefetchCtrl) return; // stale — a newer prefetch superseded this one
+      if (data.word && data.word.id !== forWord) {
+        state.next = { ...data.word, intervals: data.intervals };
+        state.nextHTML = buildNextCardHTML(state.next); // pre-render off critical path
+      }
+    })
+    .catch(() => {});
 }
 
 async function fetchWord() {
@@ -407,7 +417,7 @@ async function submitRating(rating) {
 
     // Pre-render next card off-screen RIGHT (compute W before DOM write to avoid double reflow)
     const W = getCardW();
-    renderPrevCard(buildNextCardHTML(nextWord), 'right', W);
+    renderPrevCard(state.nextHTML || buildNextCardHTML(nextWord), 'right', W);
 
     // Both cards slide LEFT together on the same rail — identical easing keeps them locked
     const exitAnim = card.animate(
@@ -445,6 +455,7 @@ async function submitRating(rating) {
     state.word      = nextWord;
     state.intervals = nextWord.intervals || null;
     state.next      = null;
+    state.nextHTML  = null;
     renderStats();
     setPhase(1);
     unlock();
@@ -483,6 +494,7 @@ async function submitRating(rating) {
       state.progress  = data.progress;
       state.intervals = data.intervals;
       state.next      = null;
+      state.nextHTML  = null;
       renderStats();
       setPhase(1);
       renderPrevCard(state.prevHTML, 'left');
@@ -608,6 +620,7 @@ async function _commitSwipe() {
     state.progress  = data.progress;
     state.intervals = data.intervals;
     state.next      = null;
+    state.nextHTML  = null;
     renderStats();
     renderWord();
     setPhase(2, true);
