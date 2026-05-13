@@ -73,6 +73,8 @@ function speakWord(word) {
       _audio = _audioPrev;
       _audioPrev = null;
       if (!_audio.paused && !_audio.ended) return; // already playing from early trigger
+    } else if (_audio?._word === word) {
+      if (!_audio.paused && !_audio.ended) return; // already playing from early trigger (forward nav)
     } else {
       _evictAudio(_audioPrev);     // 丢弃两步前的音频
       _audioPrev = _audio;
@@ -469,7 +471,7 @@ async function submitRating(rating) {
   card.classList.add('loading');
   ratingBtns.forEach(b => b.disabled = true);
 
-  const SLIDE_DUR = 120;
+  const SLIDE_DUR = 240;
 
   const unlock = () => {
     card.classList.remove('loading');
@@ -486,6 +488,10 @@ async function submitRating(rating) {
     // Pre-render next card off-screen RIGHT (compute W before DOM write to avoid double reflow)
     const W = getCardW();
     renderPrevCard(state.nextHTML || buildNextCardHTML(nextWord), 'right', W);
+
+    // Play next word audio immediately at animation start — same pattern as undo
+    _stopCurrent();
+    speakWord(nextWord.word);
 
     // Both cards slide LEFT together on the same rail — identical easing keeps them locked
     const exitAnim = card.animate(
@@ -656,12 +662,12 @@ async function _commitSwipe() {
 
   const exitAnim = card.animate(
     [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)` }],
-    { duration: 120, easing: RAIL_EASING, fill: 'forwards' }
+    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
   );
   const enterAnim = cardPrev.animate(
     [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` },
      { transform: 'translateX(0) translateY(-50%)' }],
-    { duration: 120, easing: RAIL_EASING, fill: 'forwards' }
+    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
   );
 
   let data;
