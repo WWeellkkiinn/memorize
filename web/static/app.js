@@ -291,17 +291,21 @@ function prefetchNext() {
   if (_prefetchCtrl) _prefetchCtrl.abort();
   _prefetchCtrl = new AbortController();
   const ctrl = _prefetchCtrl;
+  const timeoutId = setTimeout(() => ctrl.abort(), 10000);
   const forWord = state.word?.id;
   fetch('/api/peek', { signal: ctrl.signal })
-    .then(r => r.json())
+    .then(r => { clearTimeout(timeoutId); if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(data => {
       if (ctrl !== _prefetchCtrl) return; // stale — a newer prefetch superseded this one
       if (data.word && data.word.id !== forWord) {
         state.next = { ...data.word, intervals: data.intervals };
         state.nextHTML = buildNextCardHTML(state.next); // pre-render off critical path
+      } else {
+        state.next = null; // peek returned no new word — clear any stale data
+        state.nextHTML = null;
       }
     })
-    .catch(() => {});
+    .catch(() => { clearTimeout(timeoutId); });
 }
 
 async function fetchWord() {
@@ -430,13 +434,18 @@ async function submitRating(rating) {
     );
 
     // Submit in background while animating; gen check prevents stale retries and state overwrites
+    let doSubmitSettled = false;
     const doSubmit = (wid, r) => submitWithRetry(wid, r)
       .then(data => {
+        doSubmitSettled = true;
         if (gen !== _submitGen) return; // newer rating submitted — discard stale response
         if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
         prefetchNext();
+        // Handle pending undo here in case animation finished before doSubmit settled
+        if (_pendingUndo && state.prev) { _pendingUndo = false; _commitSwipe(); }
       })
       .catch(() => {
+        doSubmitSettled = true;
         if (gen !== _submitGen) return; // newer rating submitted — stop retrying silently
         showToast('提交失败，请检查网络', () => doSubmit(wid, r));
       });
@@ -458,7 +467,11 @@ async function submitRating(rating) {
     state.nextHTML  = null;
     renderStats();
     setPhase(1);
-    unlock();
+    // Re-enable UI; check _pendingUndo only if doSubmit already settled — otherwise doSubmit.then handles it
+    card.classList.remove('loading');
+    ratingBtns.forEach(b => b.disabled = false);
+    state.animating = false;
+    if (_pendingUndo && state.prev && doSubmitSettled) { _pendingUndo = false; _commitSwipe(); }
 
   } else {
     // Fallback (no peek data): exit left + wait for API + enter from right (single-card)
@@ -477,6 +490,7 @@ async function submitRating(rating) {
         card.style.transform = '';
         card.getAnimations().forEach(a => a.cancel());
         card.classList.remove('loading');
+        ratingBtns.forEach(b => b.disabled = false);
         _pendingUndo = false;
         state.animating = false;
         showToast('没有更多单词了');
@@ -557,6 +571,7 @@ function _snapAllBack() {
 async function _commitSwipe() {
   if (state.animating) { _pendingUndo = true; _snapAllBack(); return; }
   state.animating = true;
+  ++_submitGen; // invalidate any in-flight doSubmit — prevents post-undo stats overwrite
 
   // Batch all layout reads before any writes to avoid forced reflow
   const W = _cachedCardW || getCardW();

@@ -88,8 +88,9 @@ class WordScheduler:
 
     def _preview_next(self) -> int | None:
         """Non-destructive: peek at next word ID without side effects."""
-        if self._queue:
-            return self._queue[0]
+        for wid in self._queue:
+            if wid != self._current_id:
+                return wid
         new_words = self._store.get_new_words(limit=1)
         if new_words:
             return new_words[0]["id"]
