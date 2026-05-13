@@ -469,7 +469,7 @@ async function submitRating(rating) {
   card.classList.add('loading');
   ratingBtns.forEach(b => b.disabled = true);
 
-  const SLIDE_DUR = 240;
+  const SLIDE_DUR = 120;
 
   const unlock = () => {
     card.classList.remove('loading');
@@ -656,12 +656,12 @@ async function _commitSwipe() {
 
   const exitAnim = card.animate(
     [{ transform: `translateX(${curDx}px)` }, { transform: `translateX(${W * 1.5}px)` }],
-    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
+    { duration: 120, easing: RAIL_EASING, fill: 'forwards' }
   );
   const enterAnim = cardPrev.animate(
     [{ transform: `translateX(${-W + curDx}px) translateY(-50%)` },
      { transform: 'translateX(0) translateY(-50%)' }],
-    { duration: 240, easing: RAIL_EASING, fill: 'forwards' }
+    { duration: 120, easing: RAIL_EASING, fill: 'forwards' }
   );
 
   let data;
