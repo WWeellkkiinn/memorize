@@ -555,6 +555,13 @@ async function submitRating(rating) {
     // Invisible swap: render new content while #card is still off-screen (fill:forwards holds it at X=-W)
     renderPrevCard(prevHTML, 'left'); // old card → off-screen LEFT (parks for undo)
 
+    // Pin stage height to the new card's measured height so any post-snap reflow
+    // (renderWord innerHTML rewrite, font swap, countdown text changes) is absorbed
+    // inside the locked container instead of growing #card visibly. Mirrors the
+    // undo path's pin/release pattern.
+    const newH = cardNext.offsetHeight;
+    if (newH > 0) cardStage.style.height = newH + 'px';
+
     // Update state and render new word BEFORE snapping to center — eliminates old-content flash
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
@@ -577,6 +584,10 @@ async function submitRating(rating) {
     } else {
       renderNextCard(null);
     }
+    // Release the height pin after layout settles (rAF×2 outlives sync reflow + 1 paint)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      cardStage.style.height = '';
+    }));
     // Re-enable UI; check _pendingUndo only if doSubmit already settled — otherwise doSubmit.then handles it
     card.classList.remove('loading');
     ratingBtns.forEach(b => b.disabled = false);
