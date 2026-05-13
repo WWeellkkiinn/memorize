@@ -50,6 +50,7 @@ body {
   width: 100%;
   max-width: 480px;
   position: relative;
+  overflow-x: clip;
 }
 
 /* ── Card shell (shared geometry for current + parked cards) ───────────────── */
