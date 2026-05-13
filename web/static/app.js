@@ -88,6 +88,7 @@ function speakWord(word) {
   if (_audio.ended) {
     // Some Android browsers won't replay an ended audio — recreate it
     const w = _audio._word;
+    _evictAudio(_audio);
     _audio = _makeAudio(w);
   } else {
     _audio.currentTime = 0;
@@ -646,7 +647,12 @@ async function _commitSwipe() {
 
   // Play prev word audio immediately in sync with animation — don't wait for API
   _stopCurrent();
-  if (_audioPrev) { _audioPrev.currentTime = 0; _audioPrev.play().catch(() => {}); }
+  if (_audioPrev) {
+    _audio = _audioPrev; // update _audio immediately so no-arg speakWord() plays correct word
+    _audioPrev = null;
+    _audio.currentTime = 0;
+    _audio.play().catch(() => {});
+  }
 
   // Batch all layout reads before any writes to avoid forced reflow
   const W = _cachedCardW || getCardW();
