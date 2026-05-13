@@ -50,13 +50,11 @@ const toast         = $('toast');
 
 let _audio = null;
 
-function preloadAudio(word) {
-  if (!word) return;
-  _audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
-  _audio.load();
-}
-
-function speakWord() {
+// word 传入时创建新音频对象并播放（自动播放）；不传时重播当前缓存（按钮重听）
+function speakWord(word) {
+  if (word) {
+    _audio = new Audio(`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(word)}&type=2`);
+  }
   if (!_audio) return;
   _audio.currentTime = 0;
   _audio.play().catch(() => {});
@@ -249,7 +247,7 @@ function renderWord() {
   definition.textContent = w.definition || '';
   examples.innerHTML     = buildExamplesHTML(w);
   renderIntervals();
-  preloadAudio(w.word);
+  speakWord(w.word);
 }
 
 function updateCountdownText() {
