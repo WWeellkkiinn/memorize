@@ -132,7 +132,7 @@ body {
 
 #word-meta {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   font-size: 18px;
   color: var(--text-muted);
