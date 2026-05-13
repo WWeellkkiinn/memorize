@@ -131,9 +131,10 @@ body {
 .morpheme-sep    { color: var(--text-muted); margin: 0 1px; font-weight: 400; }
 
 #word-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
   align-items: center;
-  gap: 6px;
+  gap: 0 6px;
   font-size: 18px;
   color: var(--text-muted);
 }
@@ -156,7 +157,8 @@ body {
   border: none;
   cursor: pointer;
   padding: 0;
-  margin: 0 0 0 auto;
+  margin: 0;
+  justify-self: end;
   width: 34px;
   height: 34px;
   display: inline-flex;
