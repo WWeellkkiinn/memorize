@@ -21,6 +21,8 @@ _AUTH_PASS = os.environ.get("AUTH_PASS", "")
 
 if not _AUTH_USER or not _AUTH_PASS:
     raise RuntimeError("AUTH_USER and AUTH_PASS environment variables must be set")
+if len(_AUTH_PASS) < 8:
+    raise RuntimeError("AUTH_PASS must be at least 8 characters")
 
 _STATIC = Path(__file__).parent / "static"
 

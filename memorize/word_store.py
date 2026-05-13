@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS words (
     pos         TEXT NOT NULL DEFAULT '',
     definition  TEXT NOT NULL DEFAULT '',
     examples    TEXT NOT NULL DEFAULT '[]',
-    rank        INTEGER NOT NULL DEFAULT 0
+    rank        INTEGER NOT NULL DEFAULT 0,
+    morphemes   TEXT DEFAULT NULL
 )
 """
 

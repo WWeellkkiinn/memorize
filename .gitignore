@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+*.qmlc
 .env
+.venv/
+venv/
 dist/
 build/
 *.spec
@@ -11,8 +15,7 @@ data/ielts*.json
 data/ielts*.txt
 data/words.txt
 data/*.md
+data/colingoldberg_morphemes.json
 CLAUDE.md
 memorize-db/
-.env
 .claude/
-data/colingoldberg_morphemes.json

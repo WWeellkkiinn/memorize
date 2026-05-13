@@ -23,6 +23,7 @@ def _get_word_set() -> set[str]:
     if _WORD_SET is None:
         try:
             import nltk
+            print("Downloading NLTK words corpus (one-time, ~16 MB)...", file=sys.stderr)
             nltk.download("words", quiet=True)
             from nltk.corpus import words as _nltk_words
             _WORD_SET = set(w.lower() for w in _nltk_words.words())
@@ -82,7 +83,7 @@ BOUND_ROOTS = {
     "stitut",   # institution — Latin statuere (set up) — truncated form
     "stitute",  # substitute, constitute — full form (both needed: different endings)
     "flict",    # conflict, inflict — Latin fligere (strike)
-    # Extended for IELTS words blocked by NLTK gap
+    # Extended for vocabulary blocked by NLTK gap
     "pret",     # interpret — Latin pretium (worth)
     "ference",  # circumference — Latin ferre (to carry)
     "ficial",   # superficial — Latin facies (surface)
