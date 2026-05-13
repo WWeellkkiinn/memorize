@@ -30,6 +30,7 @@ const state = {
 const $ = id => document.getElementById(id);
 const cardStage     = $('card-stage');
 const cardPrev      = $('card-prev');
+const cardNext      = $('card-next');
 const card          = $('card');
 const wordPos       = $('word-pos');
 const wordText      = $('word-text');
@@ -364,10 +365,14 @@ function prefetchNext() {
       if (data.word && data.word.id !== forWord) {
         state.next = { ...data.word, intervals: data.intervals };
         state.nextHTML = buildNextCardHTML(state.next); // pre-render off critical path
+        // Only stage DOM when no slide animation is in flight — otherwise we'd yank
+        // the entering cardNext mid-animation. submitRating cleanup re-stages on finish.
+        if (!state.animating) renderNextCard(state.nextHTML);
         preloadNextAudio(state.next.word);
       } else {
         state.next = null; // peek returned no new word — clear any stale data
         state.nextHTML = null;
+        if (!state.animating) renderNextCard(null);
         _audioNext = null;
       }
     })
@@ -386,6 +391,7 @@ async function fetchWord() {
     if (!data.word) return;
     setPhase(1);
     renderPrevCard(null); // no prev on first load
+    renderNextCard(null); // no next until prefetch lands
     resetCardPositions();
     prefetchNext();
   } catch (e) {
@@ -419,7 +425,7 @@ function buildNextCardHTML(word) {
     `<span class="speak-btn-preview" aria-hidden="true">🔊</span>` +
     `</div></div>` +
     `<div id="answer-area">` +
-    `<div id="hint-area"><div id="hint-text">单击查看答案</div></div>` +
+    `<div id="hint-area"><div id="hint-text">单击查看答案，3 秒后自动揭示</div></div>` +
     `<div id="definition" class="invisible">${escHtml(word.definition || '')}</div>` +
     `</div>` +
     `<div id="examples">${buildExamplesHTML(word)}</div>` +
@@ -450,8 +456,10 @@ function prevOffScreen(side = 'left', w = null) {
 function resetCardPositions() {
   card.getAnimations().forEach(a => a.cancel());
   cardPrev.getAnimations().forEach(a => a.cancel());
+  cardNext.getAnimations().forEach(a => a.cancel());
   card.style.transform = '';
   cardPrev.style.transform = prevOffScreen('left');
+  cardNext.style.transform = prevOffScreen('right');
 }
 
 function renderPrevCard(html, side = 'left', w = null) {
@@ -465,6 +473,21 @@ function renderPrevCard(html, side = 'left', w = null) {
   cardPrev.innerHTML = html;
   cardPrev.style.visibility = '';
   cardPrev.style.transform = offScreen;
+}
+
+// Park next card off-screen right, fully rendered in DOM so layout/font metrics
+// are warm by the time the user submits a rating — eliminates first-paint jitter.
+function renderNextCard(html, w = null) {
+  cardNext.getAnimations().forEach(a => a.cancel());
+  if (!html) {
+    cardNext.style.visibility = 'hidden';
+    cardNext.innerHTML = '';
+    return;
+  }
+  const offScreen = prevOffScreen('right', w);
+  cardNext.innerHTML = html;
+  cardNext.style.visibility = '';
+  cardNext.style.transform = offScreen;
 }
 
 async function submitRating(rating) {
@@ -489,9 +512,11 @@ async function submitRating(rating) {
     const prevHTML  = card.innerHTML;
     const nextWord  = state.next;
 
-    // Pre-render next card off-screen RIGHT (compute W before DOM write to avoid double reflow)
     const W = getCardW();
-    renderPrevCard(state.nextHTML || buildNextCardHTML(nextWord), 'right', W);
+    // #card-next was pre-staged in prefetchNext — defensive fallback if missing
+    if (!cardNext.innerHTML) {
+      renderNextCard(state.nextHTML || buildNextCardHTML(nextWord), W);
+    }
 
     // Play next word audio immediately at animation start — same pattern as undo
     _stopCurrent();
@@ -502,7 +527,7 @@ async function submitRating(rating) {
       [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
       { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
     );
-    const enterAnim = cardPrev.animate(
+    const enterAnim = cardNext.animate(
       [{ transform: `translateX(${W}px) translateY(-50%)` }, { transform: 'translateX(0) translateY(-50%)' }],
       { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
     );
@@ -528,20 +553,30 @@ async function submitRating(rating) {
     await Promise.all([exitAnim.finished, enterAnim.finished]);
 
     // Invisible swap: render new content while #card is still off-screen (fill:forwards holds it at X=-W)
-    renderPrevCard(prevHTML, 'left'); // old card → off-screen LEFT (cancels enterAnim inside)
+    renderPrevCard(prevHTML, 'left'); // old card → off-screen LEFT (parks for undo)
 
     // Update state and render new word BEFORE snapping to center — eliminates old-content flash
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
     state.word      = nextWord;
     state.intervals = nextWord.intervals || null;
-    state.next      = null;
-    state.nextHTML  = null;
+    // Only clear if state.next still references the consumed word — a fresh prefetch
+    // may have already populated state.next with the word-after-next mid-animation.
+    if (state.next === nextWord) {
+      state.next = null;
+      state.nextHTML = null;
+    }
     renderStats();
     setPhase(1);
 
     card.style.transform = '';        // #card snaps to center already showing new content
     exitAnim.cancel();                // removes fill:forwards so inline style wins
+    // Reset cardNext: if a new word arrived during animation, stage it; otherwise clear.
+    if (state.nextHTML) {
+      renderNextCard(state.nextHTML);
+    } else {
+      renderNextCard(null);
+    }
     // Re-enable UI; check _pendingUndo only if doSubmit already settled — otherwise doSubmit.then handles it
     card.classList.remove('loading');
     ratingBtns.forEach(b => b.disabled = false);
@@ -725,6 +760,7 @@ async function _commitSwipe() {
     renderWord();
     setPhase(2, true);
     renderPrevCard(null);
+    renderNextCard(null);
     cardStage.style.height = ''; // release: card height = prevH = stage height → no jump
   } else {
     exitAnim.cancel(); enterAnim.cancel();

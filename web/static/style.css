@@ -80,8 +80,9 @@ body {
 
 #card.loading { pointer-events: none; }
 
-/* ── Prev card (off-screen left, slides in on right-swipe undo) ─────────────── */
-#card-prev {
+/* ── Off-stage cards (parked left for undo, parked right for forward) ───────── */
+#card-prev,
+#card-next {
   position: absolute;
   top: 50%; left: 0; right: 0;
   z-index: 0;
@@ -90,11 +91,16 @@ body {
   border-radius: 20px;
   padding: 28px 24px 20px;
   box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.04) inset,
     0 4px 24px rgba(0, 0, 0, 0.08),
     0 1px 4px rgba(0, 0, 0, 0.04);
+  background-image: linear-gradient(
+    to bottom,
+    rgba(99, 102, 241, 0.025) 0%,
+    transparent 60px
+  );
   pointer-events: none;
   will-change: transform;
-  overflow: hidden;
 }
 
 
