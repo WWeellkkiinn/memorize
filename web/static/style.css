@@ -152,18 +152,14 @@ body {
 #speak-btn {
   cursor: pointer;
   margin-left: auto;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  opacity: 0.55;
+  padding: 4px 8px;
+  font-size: 18px;
+  opacity: 0.6;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
-#speak-btn svg { width: 20px; height: 20px; display: block; }
-#speak-btn:active { opacity: 1; color: var(--accent); }
+#speak-btn:active { opacity: 1; }
 
 /* ── Answer Area ───────────────────────────────────────────────────────────── */
 
