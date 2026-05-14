@@ -133,6 +133,7 @@ SUFFIXES = sorted(dict.fromkeys([
     "ent", "ant", "age", "ure", "dom", "ish", "ess",
     "ery", "tic", "acy", "ee", "ly", "al", "ic", "or",
     "ty", "en", "cy",
+    "ile", "ine", "ude", "ive",
 ]), key=lambda x: -len(x))
 
 MIN_ROOT = 4
@@ -149,7 +150,7 @@ BOUND_ROOTS = {
     "stant", "stitut", "stitute", "flict",
     "pret", "ference", "ficial", "cend", "gress", "cript",
     "cosm", "rogate", "mitt", "vagant",
-    # Added via Codex etymology research
+    # Added via Codex etymology research (round 1)
     "ceal",     # Latin celare (hide): conceal
     "cise",     # Latin caedere (cut): precise, concise, incise
     "coct",     # Latin coquere (cook/prepare): concoct
@@ -174,6 +175,14 @@ BOUND_ROOTS = {
     "tect",     # Latin tegere (cover): detect, protect
     "vict",     # Latin vincere (conquer): convict, evict
     "vious",    # Latin via (way/road): obvious, previous, devious
+    # Added via Codex etymology research (round 2)
+    "medi",     # Latin medius (middle): mediate, medieval, meditate
+    "gradu",    # Latin gradus (step): gradual, graduate
+    "cred",     # Latin credere (believe/trust): incredible, credible
+    "frag",     # Latin frangere (break): fragile, fragment
+    "fert",     # Latin ferre (bear/carry): fertile, fertility
+    "juven",    # Latin juvenis (young): juvenile
+    "territ",   # Latin terra (land): territory, territorial
 }
 
 # ── Overrides (applied before both strategies) ────────────────────────────────
