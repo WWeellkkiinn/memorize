@@ -149,6 +149,31 @@ BOUND_ROOTS = {
     "stant", "stitut", "stitute", "flict",
     "pret", "ference", "ficial", "cend", "gress", "cript",
     "cosm", "rogate", "mitt", "vagant",
+    # Added via Codex etymology research
+    "ceal",     # Latin celare (hide): conceal
+    "cise",     # Latin caedere (cut): precise, concise, incise
+    "coct",     # Latin coquere (cook/prepare): concoct
+    "dicate",   # Latin dicare (proclaim): dedicate, indicate
+    "dorse",    # Latin dorsum (back): endorse
+    "fane",     # Latin fanum (temple/sacred): profane
+    "haust",    # Latin haurire (draw out): exhaust
+    "hort",     # Latin hortari (urge): exhort
+    "lige",     # Latin ligare (bind): oblige
+    "lude",     # Latin ludere (play): prelude, delude, interlude
+    "lumin",    # Latin lumen (light): illuminate, luminous
+    "nounce",   # Latin nuntiare (announce): denounce, pronounce, renounce
+    "plete",    # Latin plere (fill): deplete, complete, replete
+    "plicit",   # Latin plicare (fold): implicit, explicit, complicit
+    "plore",    # Latin plorare (cry out): explore, implore, deplore
+    "prive",    # Latin privare (separate): deprive
+    "pute",     # Latin putare (think/reckon): compute, dispute, repute
+    "quer",     # Latin quaerere (seek): conquer
+    "quisite",  # Latin quaesitus (sought): exquisite, requisite
+    "stinct",   # Latin stinguere (prick/extinguish): instinct, distinct, extinct
+    "sult",     # Latin salire (leap): insult, result, exult
+    "tect",     # Latin tegere (cover): detect, protect
+    "vict",     # Latin vincere (conquer): convict, evict
+    "vious",    # Latin via (way/road): obvious, previous, devious
 }
 
 # ── Overrides (applied before both strategies) ────────────────────────────────
@@ -171,6 +196,7 @@ WORD_DENYLIST = {
     "desert", "missile",
     "personnel",   # per- is not the Latin prefix here
     "mission",     # MorphoLex=1 morpheme; whitelist would give mis+sion which misleads
+    "consult",     # con+sult misleads — consulere ≠ salire; different root from insult
 }
 
 
