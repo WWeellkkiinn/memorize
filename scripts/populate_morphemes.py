@@ -34,6 +34,8 @@ def _flatten_tree(nodes: list) -> list[tuple[str, str]]:
     """Flatten morphemes tree to ordered (text, type) pairs."""
     result = []
     for node in nodes:
+        if not isinstance(node, dict):
+            continue
         children = node.get("children")
         if children:
             result.extend(_flatten_tree(children))
