@@ -1,11 +1,14 @@
 """Pre-compute morpheme splits for the word DB.
 
-Strategy: curated prefix/suffix whitelist only — no auto-discovery.
-Only stores a split when a real affix is matched AND the remaining
-root is >= MIN_ROOT characters. NULL = no split (shown as full word).
+Primary strategy: MorphoLex-en via `morphemes` library (~70k words).
+Fallback strategy: curated prefix/suffix whitelist + NLTK root validation.
+NULL = no split found (shown as full word).
 
-Run locally, then upload DB to server:
-  python scripts/populate_morphemes.py /path/to/words.db [--preview]
+Setup (one-time):
+  pip install morphemes
+
+Run:
+  python scripts/populate_morphemes.py [/path/to/words.db] [--preview]
 """
 from __future__ import annotations
 import os
@@ -13,7 +16,78 @@ import sqlite3
 import sys
 from pathlib import Path
 
-# ── NLTK word set (lazy-loaded on first use) ──────────────────────────────────
+# ── MorphoLex (primary) ───────────────────────────────────────────────────────
+
+def _load_morpholex():
+    try:
+        from morphemes import Morphemes
+        m = Morphemes()
+        print("MorphoLex loaded.", file=sys.stderr)
+        return m
+    except ImportError:
+        print("WARNING: morphemes not installed — falling back to whitelist only.\n"
+              "Install: pip install morphemes", file=sys.stderr)
+        return None
+
+
+def _flatten_tree(nodes: list) -> list[tuple[str, str]]:
+    """Flatten morphemes tree to ordered (text, type) pairs."""
+    result = []
+    for node in nodes:
+        children = node.get("children")
+        if children:
+            result.extend(_flatten_tree(children))
+        elif "text" in node:
+            result.append((node["text"], node["type"]))
+    return result
+
+
+def _parts_to_segm(parts: list[tuple[str, str]]) -> str | None:
+    """Convert flat (text, type) list to our pipe-separated format.
+
+    bound morphemes before the first root become :prefix;
+    bound morphemes after become :bound.
+    """
+    if not parts:
+        return None
+
+    first_root = next((i for i, (_, t) in enumerate(parts) if t == "root"), None)
+
+    # If no root node exists but there are bound morphemes, we can't determine
+    # prefix vs suffix position — bail out rather than mislabel everything.
+    has_bound = any(t == "bound" for _, t in parts)
+    if first_root is None and has_bound:
+        return None
+
+    out = []
+    for i, (text, mtype) in enumerate(parts):
+        if mtype == "root":
+            out.append(f"{text}:root")
+        elif mtype == "free":
+            out.append(f"{text}:free")
+        elif mtype == "bound":
+            tag = "prefix" if i < first_root else "bound"
+            out.append(f"{text}:{tag}")
+
+    return "|".join(out) if len(out) > 1 else None
+
+
+def segment_morpholex(word: str, m) -> str | None:
+    try:
+        result = m.parse(word)
+    except Exception:
+        return None
+
+    if result.get("status") != "FOUND_IN_DATABASE":
+        return None
+    if result.get("morpheme_count", 1) <= 1:
+        return None
+
+    parts = _flatten_tree(result.get("tree", []))
+    return _parts_to_segm(parts)
+
+
+# ── NLTK word set (fallback validation) ──────────────────────────────────────
 
 _WORD_SET: set[str] | None = None
 
@@ -23,7 +97,6 @@ def _get_word_set() -> set[str]:
     if _WORD_SET is None:
         try:
             import nltk
-            print("Downloading NLTK words corpus (one-time, ~16 MB)...", file=sys.stderr)
             nltk.download("words", quiet=True)
             from nltk.corpus import words as _nltk_words
             _WORD_SET = set(w.lower() for w in _nltk_words.words())
@@ -33,7 +106,7 @@ def _get_word_set() -> set[str]:
     return _WORD_SET
 
 
-# ── Curated affix lists (longest-first for greedy matching) ──────────────────
+# ── Curated affix lists (whitelist fallback) ──────────────────────────────────
 
 PREFIXES = sorted([
     "circum", "pseudo", "hyper", "hypo", "macro", "micro",
@@ -46,7 +119,7 @@ PREFIXES = sorted([
     "il", "im", "in", "ir", "de",
 ], key=lambda x: -len(x))
 
-SUFFIXES = sorted(dict.fromkeys([   # dict.fromkeys preserves order and deduplicates
+SUFFIXES = sorted(dict.fromkeys([
     "fication", "isation", "ization", "ational", "ication",
     "iveness", "fulness", "ingness", "ousness",
     "atorial", "ological",
@@ -63,7 +136,6 @@ SUFFIXES = sorted(dict.fromkeys([   # dict.fromkeys preserves order and deduplic
 
 MIN_ROOT = 4
 
-# Known bound roots that don't appear in NLTK but are teachable morphemes
 BOUND_ROOTS = {
     "struct", "rupt", "duct", "dict", "port", "tract", "ject",
     "spect", "scribe", "script", "vert", "vers", "mit", "miss",
@@ -72,68 +144,34 @@ BOUND_ROOTS = {
     "solve", "solut", "pos", "pon", "pel", "puls", "sent",
     "sequ", "sect", "sist", "tain", "ten", "val", "ven", "vent",
     "voc", "vok", "vis", "vid",
-    # Greek roots
-    "logue",    # monologue, prologue — Greek logos (word)
-    "phor",     # metaphor — Greek pherein (carry)
-    "nomy",     # autonomy — Greek nomos (law)
-    "tonous",   # monotonous — Greek tonos (tone)
-    "biotic",   # antibiotic — Greek bios (life)
-    # Latin roots (additional)
-    "stant",    # constant, substantial — Latin stare (stand)
-    "stitut",   # institution — Latin statuere (set up) — truncated form
-    "stitute",  # substitute, constitute — full form (both needed: different endings)
-    "flict",    # conflict, inflict — Latin fligere (strike)
-    # Extended for vocabulary blocked by NLTK gap
-    "pret",     # interpret — Latin pretium (worth)
-    "ference",  # circumference — Latin ferre (to carry)
-    "ficial",   # superficial — Latin facies (surface)
-    "cend",     # transcend — Latin scandere (to climb)
-    "gress",    # transgress — Latin gradi (to step)
-    "cript",    # transcript — variant of script
-    "cosm",     # microcosm — Greek kosmos (world)
-    "rogate",   # interrogate — Latin rogare (to ask)
-    "mitt",     # intermittent — Latin mittere (to send)
-    "vagant",   # extravagant — Latin vagari (to wander)
+    "logue", "phor", "nomy", "tonous", "biotic",
+    "stant", "stitut", "stitute", "flict",
+    "pret", "ference", "ficial", "cend", "gress", "cript",
+    "cosm", "rogate", "mitt", "vagant",
 }
 
-# Manual splits for words with unusual morphology that rules can't handle cleanly
+# ── Overrides (applied before both strategies) ────────────────────────────────
+
 WORD_ALLOWLIST: dict[str, str] = {
-    "multitude":    "multi:prefix|tude:root",       # multi (many) + -tude (state)
-    "superfluous":  "super:prefix|fluous:root",     # super + fluere (to flow)
-    "supersede":    "super:prefix|sede:root",       # super + sedere (to sit/yield)
-    "superstition": "super:prefix|stition:root",    # super + stare (to stand)
-    "transition":   "trans:prefix|ition:root",      # trans (across) + going
+    "multitude":    "multi:prefix|tude:root",
+    "superfluous":  "super:prefix|fluous:root",
+    "supersede":    "super:prefix|sede:root",
+    "superstition": "super:prefix|stition:root",
+    "transition":   "trans:prefix|ition:root",
 }
 
-# Words whose surface morphology looks splittable but is etymologically
-# wrong or would actively mislead learners — never split these.
 WORD_DENYLIST = {
-    "transparent",   # parent ≠ Latin paren(s)
-    "intense",       # in- here = "into", not negation
-    "refund",        # re+fund misleads into "fund again"
-    "average",       # aver+age has no learning value
-    "redundant",     # dund is not a teachable root
-    "setting",       # sett is a badger burrow, not the root
-    "nationalism",   # national should not be marked as root
-    "nationality",   # same issue
-    # ad- false positives (here/dress/just are coincidental)
-    "adhere",        # ad+here misleads — not "to here"
-    "address",       # ad+dress misleads — not "to dress"
-    "adjust",        # ad+just misleads — not "to just"
-    # ab- false positives
-    "abridge",       # ab+ridge — ridge is coincidental
-    "abrasion",      # ab+rasion — rasion not teachable
-    # re- false positives
-    "resort",        # re+sort misleads — not "sort again"
-    "retail",        # re+tail misleads — not "tail again"
-    "revenue",       # re+venue misleads — not "venue again"
-    "revenge",       # re+venge — venge not teachable here
-    "reptile",       # re+ptile — nonsense
-    # other false positives
-    "desert",        # de+sert — sert here is coincidental
-    "missile",       # mis+sile — sile not a root
+    "transparent", "intense", "refund", "average", "redundant",
+    "setting", "nationalism", "nationality",
+    "adhere", "address", "adjust",
+    "abridge", "abrasion",
+    "resort", "retail", "revenue", "revenge", "reptile",
+    "desert", "missile",
+    "personnel",   # per- is not the Latin prefix here
 }
 
+
+# ── Whitelist fallback ────────────────────────────────────────────────────────
 
 def _root_valid(root: str) -> bool:
     ws = _get_word_set()
@@ -145,17 +183,9 @@ def _root_valid(root: str) -> bool:
     )
 
 
-def segment(word: str) -> str | None:
+def segment_whitelist(word: str) -> str | None:
     original = word.lower()
 
-    if original in WORD_DENYLIST:
-        return None
-    if original in WORD_ALLOWLIST:
-        return WORD_ALLOWLIST[original]
-
-    # MIN_ROOT=4 is intentionally uniform across prefix lengths.
-    # Short prefixes (re/de/in) rely on WORD_DENYLIST to block false positives
-    # rather than a higher threshold, which would break valid splits like re+fine.
     prefix = ""
     remaining = original
     for p in PREFIXES:
@@ -175,11 +205,6 @@ def segment(word: str) -> str | None:
                 break
 
     if not _root_valid(root):
-        # Fallback: if a prefix was matched but root is invalid, try suffix-only
-        # on the original word. Handles cases where greedy longest prefix masks a
-        # valid suffix-only split.
-        # _root_valid only checks +e/+er variants; +ed/+ing/+s are intentionally
-        # excluded to avoid false positives from over-broad NLTK matches.
         if prefix:
             for s in SUFFIXES:
                 if original.endswith(s) and len(original) - len(s) >= MIN_ROOT:
@@ -200,6 +225,26 @@ def segment(word: str) -> str | None:
     return "|".join(parts)
 
 
+# ── Public entry point ────────────────────────────────────────────────────────
+
+def segment(word: str, m=None) -> str | None:
+    original = word.lower()
+
+    if original in WORD_DENYLIST:
+        return None
+    if original in WORD_ALLOWLIST:
+        return WORD_ALLOWLIST[original]
+
+    if m:
+        result = segment_morpholex(original, m)
+        if result:
+            return result
+
+    return segment_whitelist(original)
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
 def main() -> None:
     args = sys.argv[1:]
     preview = "--preview" in args
@@ -208,21 +253,21 @@ def main() -> None:
     _default_db = Path(os.environ.get("APPDATA") or Path.home()) / "memorize" / "words.db"
     db_path = Path(args[0]) if args else _default_db
 
+    m = _load_morpholex()
+
     conn = sqlite3.connect(str(db_path), timeout=60)
     conn.row_factory = sqlite3.Row
     try:
         words_rows = conn.execute("SELECT id, word FROM words").fetchall()
 
-        print(f"Prefixes: {len(PREFIXES)}, Suffixes: {len(SUFFIXES)}")
-
         if preview:
             import random
+
             if not words_rows:
                 print("No words in DB.")
                 return
 
-            # Compute once, reuse for both display and stats
-            results = {r["word"]: segment(r["word"]) for r in words_rows}
+            results = {r["word"]: segment(r["word"], m) for r in words_rows}
             words = list(results)
 
             samples = [
@@ -233,13 +278,20 @@ def main() -> None:
                 "applaud", "suffer", "mortal", "construct", "disorder",
                 "amount", "rescue", "average", "schedule", "ancestor",
                 "represent", "redundant", "transparent", "benevolent",
+                # previously failing words
+                "misguided", "outskirts", "psychology", "outdated",
+                "masterpiece", "personnel", "thermometer", "plausible",
             ]
             word_set = set(results)
             print("\n=== Target samples ===")
             for w in samples:
-                result = results[w] if w in word_set else segment(w)
+                result = results[w] if w in word_set else segment(w, m)
                 tag = "(not in list)" if w not in word_set else ""
-                print(f"  {w:30s} -> {result or '(no split)'} {tag}")
+                src = ""
+                if result and w not in WORD_ALLOWLIST and w not in WORD_DENYLIST:
+                    ml = segment_morpholex(w, m) if m else None
+                    src = " [morpholex]" if ml else " [whitelist]"
+                print(f"  {w:30s} -> {result or '(no split)'}{src} {tag}")
 
             print("\n=== Random 30 from list ===")
             for w in sorted(random.sample(words, min(30, len(words)))):
@@ -254,7 +306,7 @@ def main() -> None:
 
         updated = skipped = 0
         for row in words_rows:
-            result = segment(row["word"])
+            result = segment(row["word"], m)
             conn.execute("UPDATE words SET morphemes=? WHERE id=?", (result, row["id"]))
             if result:
                 updated += 1
