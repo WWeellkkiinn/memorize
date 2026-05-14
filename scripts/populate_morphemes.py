@@ -47,28 +47,27 @@ def _flatten_tree(nodes: list) -> list[tuple[str, str]]:
 def _parts_to_segm(parts: list[tuple[str, str]]) -> str | None:
     """Convert flat (text, type) list to our pipe-separated format.
 
-    bound morphemes before the first root become :prefix;
-    bound morphemes after become :bound.
+    MorphoLex explicitly marks prefixes as type "prefix". residual "bound"
+    nodes before the first root/free core are also mapped to :prefix.
     """
     if not parts:
         return None
 
-    first_root = next((i for i, (_, t) in enumerate(parts) if t == "root"), None)
+    first_core = next((i for i, (_, t) in enumerate(parts) if t in ("root", "free")), None)
 
-    # If no root node exists but there are bound morphemes, we can't determine
-    # prefix vs suffix position — bail out rather than mislabel everything.
+    # Bail if there are bound morphemes but no core — can't determine structure.
     has_bound = any(t == "bound" for _, t in parts)
-    if first_root is None and has_bound:
+    if first_core is None and has_bound:
         return None
 
     out = []
     for i, (text, mtype) in enumerate(parts):
-        if mtype == "root":
-            out.append(f"{text}:root")
-        elif mtype == "free":
-            out.append(f"{text}:free")
+        if mtype in ("root", "free"):
+            out.append(f"{text}:{mtype}")
+        elif mtype == "prefix":
+            out.append(f"{text}:prefix")
         elif mtype == "bound":
-            tag = "prefix" if i < first_root else "bound"
+            tag = "prefix" if (first_core is not None and i < first_core) else "bound"
             out.append(f"{text}:{tag}")
 
     return "|".join(out) if len(out) > 1 else None
@@ -160,6 +159,7 @@ WORD_ALLOWLIST: dict[str, str] = {
     "supersede":    "super:prefix|sede:root",
     "superstition": "super:prefix|stition:root",
     "transition":   "trans:prefix|ition:root",
+    "plausible":    "plaus:root|ible:bound",    # MorphoLex treats as 1 morpheme; etymologically plaudere+ible
 }
 
 WORD_DENYLIST = {
@@ -170,6 +170,7 @@ WORD_DENYLIST = {
     "resort", "retail", "revenue", "revenge", "reptile",
     "desert", "missile",
     "personnel",   # per- is not the Latin prefix here
+    "mission",     # MorphoLex=1 morpheme; whitelist would give mis+sion which misleads
 }
 
 
