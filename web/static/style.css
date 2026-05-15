@@ -120,6 +120,8 @@ body {
   letter-spacing: -0.02em;
   color: var(--text);
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 
 .morpheme-prefix { color: var(--accent); }
@@ -278,7 +280,21 @@ body {
   padding-top: 10px;
   border-top: 1px solid var(--border);
   font-size: 16px;
+  line-height: 1.35;
   color: var(--text-muted);
+  /* Reserve height for the 2-line right column (.stat-side, 14px) so cards don't reflow on swap. */
+  min-height: calc(14px * 1.35 * 2 + 2px);
+}
+
+.stats-row > span,
+.stat-side > span { white-space: nowrap; }
+
+.stat-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 14px;
 }
 
 .stat-stage {
@@ -288,6 +304,12 @@ body {
   font-weight: 600;
   letter-spacing: 0.04em;
 }
+
+.stat-stage[data-stage="新词"] { color: var(--stage-new); }
+.stat-stage[data-stage="初识"] { color: var(--stage-familiar); }
+.stat-stage[data-stage="记忆"] { color: var(--stage-memory); }
+.stat-stage[data-stage="熟悉"] { color: var(--stage-known); }
+.stat-stage[data-stage="掌握"] { color: var(--stage-mastered); }
 
 .stat-stage::before {
   content: '';

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from collections import deque
 
 from fsrs import Rating
@@ -12,6 +13,7 @@ from memorize.word_store import WordStore
 log = logging.getLogger(__name__)
 
 _QUEUE_FILL = 20
+_EMPTY_FILL_COOLDOWN = 5.0  # seconds — skip _fill_queue if last refill returned empty recently
 
 
 class WordScheduler:
@@ -21,6 +23,7 @@ class WordScheduler:
         self._current_id: int | None = None
         self._peeked_word: dict | None = None  # cached to avoid extra DB read in _pick_next
         self._undo_snapshot: dict | None = None
+        self._empty_fill_until: float = 0.0  # short-circuit refills when DB just returned no due words
         self._fill_queue()
 
     @property
@@ -50,6 +53,8 @@ class WordScheduler:
         if snap:
             self._undo_snapshot = {"word_id": word_id, **snap}
         self._store.rate(word_id, rating)
+        # DB state changed — invalidate any cached "no due words" short-circuit.
+        self._empty_fill_until = 0.0
         if self._current_id == word_id:
             self._current_id = None
         self._remove_from_queue(word_id)
@@ -75,7 +80,12 @@ class WordScheduler:
         self._store.undo_rate(snap["word_id"], snap)
         # Put the displaced word (B) back at queue front so it shows next after re-rating A.
         # B was removed from queue when it was selected; _current_id still holds B's id here.
-        if self._current_id is not None and self._current_id != snap["word_id"]:
+        # Guard against duplicate enqueue: a refill between rate() and undo may have re-added B.
+        if (
+            self._current_id is not None
+            and self._current_id != snap["word_id"]
+            and self._current_id not in self._queue
+        ):
             self._queue.appendleft(self._current_id)
         self._current_id = snap["word_id"]
         self._peeked_word = None  # invalidate stale preload — must re-peek after undo
@@ -88,6 +98,12 @@ class WordScheduler:
 
     def _preview_next(self) -> int | None:
         """Non-destructive: peek at next word ID without side effects."""
+        for wid in self._queue:
+            if wid != self._current_id:
+                return wid
+        # Queue drained — re-read DB before falling back to new words, so cards
+        # that just became due (e.g. rated Again moments ago) get picked up.
+        self._fill_queue()
         for wid in self._queue:
             if wid != self._current_id:
                 return wid
@@ -114,6 +130,11 @@ class WordScheduler:
         if self._queue:
             return self._queue.popleft()
 
+        # Queue drained — refill from DB before falling back to new words.
+        self._fill_queue()
+        if self._queue:
+            return self._queue.popleft()
+
         # 2. New words (no daily quota — user-paced)
         new_words = self._store.get_new_words(limit=1)
         if new_words:
@@ -130,7 +151,9 @@ class WordScheduler:
         return None
 
     def _fill_queue(self) -> None:
-        """Rebuild the in-memory due queue from DB."""
+        """Rebuild the in-memory due queue from DB. Throttled when DB just returned no due words."""
+        if time.monotonic() < self._empty_fill_until:
+            return
         due = self._store.get_due_words(limit=_QUEUE_FILL)
         seen: set[int] = set()
         new_queue: deque[int] = deque()
@@ -140,3 +163,5 @@ class WordScheduler:
                 new_queue.append(wid)
                 seen.add(wid)
         self._queue = new_queue
+        if not new_queue:
+            self._empty_fill_until = time.monotonic() + _EMPTY_FILL_COOLDOWN

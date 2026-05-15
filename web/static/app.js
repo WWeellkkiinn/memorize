@@ -2,14 +2,6 @@
 
 const MORPHEME_TYPES = new Set(['prefix', 'root', 'bound', 'free']);
 
-const STAGE_COLORS = {
-  '新词': 'var(--stage-new)',
-  '初识': 'var(--stage-familiar)',
-  '记忆': 'var(--stage-memory)',
-  '熟悉': 'var(--stage-known)',
-  '掌握': 'var(--stage-mastered)',
-};
-
 const state = {
   phase: 0,         // 0=loading, 1=self-test, 2=revealed
   word: null,
@@ -215,24 +207,28 @@ function clearTimers() {
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
-function renderStats() {
-  const w = state.word;
+// Format helpers — single source of truth, also used by buildCardHTML.
+function formatProgressText(p) {
+  return p ? `${p.introduced}/${p.total}` : '';
+}
+function formatCountsText(s) {
+  return s ? `${s.newTotal + s.reviewedTotal}次·新${s.newWords}·复${s.reviewedWords}` : '';
+}
+
+// Sync stats DOM in `root` with current state.stats/progress. Stage color is now
+// driven by [data-stage] CSS rules, so this only updates numeric values.
+// Default root is the live #card (NOT document, which would match #card-prev first).
+function renderStats(root = card) {
   const s = state.stats;
   const p = state.progress;
-  if (w) {
-    const stage = q('.stat-stage');
-    if (stage) {
-      stage.textContent = w.stage || '';
-      stage.style.color = STAGE_COLORS[w.stage] || 'var(--text-muted)';
-    }
-  }
+  if (!root) return;
   if (p) {
-    const prog = q('.stat-progress');
-    if (prog) prog.textContent = `${p.introduced} / ${p.total}`;
+    const prog = root.querySelector('.stat-progress');
+    if (prog) prog.textContent = formatProgressText(p);
   }
   if (s) {
-    const counts = q('.stat-counts');
-    if (counts) counts.textContent = `共${s.newTotal + s.reviewedTotal}次 | 新词${s.newWords} | 复习${s.reviewedWords}`;
+    const counts = root.querySelector('.stat-counts');
+    if (counts) counts.textContent = formatCountsText(s);
   }
 }
 
@@ -386,9 +382,8 @@ const RAIL_EASING  = 'ease-in-out';
 // classes for phase 2.
 function buildCardHTML(word) {
   if (!word) return '';
-  const progressText = state.progress ? `${state.progress.introduced} / ${state.progress.total}` : '';
-  const s = state.stats;
-  const countsText = s ? `共${s.newTotal + s.reviewedTotal}次 | 新词${s.newWords} | 复习${s.reviewedWords}` : '';
+  const progressText = formatProgressText(state.progress);
+  const countsText = formatCountsText(state.stats);
   return (
     `<div class="card-header">` +
       `<span class="word-text">${buildMorphemeHTML(word)}</span>` +
@@ -410,9 +405,11 @@ function buildCardHTML(word) {
       `<button class="rating-btn btn-easy"  data-rating="4">轻 松</button>` +
     `</div>` +
     `<div class="stats-row">` +
-      `<span class="stat-stage">${escHtml(word.stage || '')}</span>` +
-      `<span class="stat-progress">${escHtml(progressText)}</span>` +
-      `<span class="stat-counts">${escHtml(countsText)}</span>` +
+      `<span class="stat-stage" data-stage="${escHtml(word.stage || '')}">${escHtml(word.stage || '')}</span>` +
+      `<div class="stat-side">` +
+        `<span class="stat-progress">${escHtml(progressText)}</span>` +
+        `<span class="stat-counts">${escHtml(countsText)}</span>` +
+      `</div>` +
     `</div>`
   );
 }
@@ -503,11 +500,21 @@ async function submitRating(rating) {
     );
 
     let doSubmitSettled = false;
+    // Tracks whether the cardNext→card swap has occurred. Before swap, cardNext is
+    // the visible incoming card; after swap, cardNext gets reassigned to the *next*
+    // prefetched word, so writing stats into it would mutate the wrong card.
+    let swapDone = false;
     const doSubmit = () => submitWithRetry(wordId, rating)
       .then(data => {
         doSubmitSettled = true;
         if (gen !== _submitGen) return;
-        if (data.stats) { state.stats = data.stats; state.progress = data.progress ?? state.progress; renderStats(); }
+        if (data.stats) {
+          state.stats = data.stats;
+          state.progress = data.progress ?? state.progress;
+          // Pre-swap: refresh the still-sliding-in cardNext directly.
+          // Post-swap: buildCardHTML below already used latest state.stats, nothing to do.
+          if (!swapDone) renderStats(cardNext);
+        }
         prefetchNext();
         if (_pendingUndo && state.prev) { _pendingUndo = false; _commitSwipe(); }
       })
@@ -525,8 +532,8 @@ async function submitRating(rating) {
     state.prev      = state.word;
     state.prevHTML  = prevHTML;
     state.word      = nextWord;
-    card.innerHTML  = buildCardHTML(state.word);
-    renderStats();  // applies stat-stage color via JS (CSP-safe) + refreshes any stats updated by doSubmit
+    card.innerHTML  = buildCardHTML(state.word);  // already uses latest state.stats — no extra renderStats needed
+    swapDone = true;  // any future doSubmit settle will see this and skip cardNext write
     setPhase(1);
 
     card.style.transform = '';
