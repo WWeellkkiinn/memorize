@@ -325,9 +325,9 @@ function prefetchNext() {
   const timeoutId = setTimeout(() => ctrl.abort(), 10000);
   const forWord = state.word?.id;
   fetch('/api/peek', { signal: ctrl.signal })
-    .then(r => { clearTimeout(timeoutId); if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(r => { clearTimeout(timeoutId); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => {
-      if (ctrl !== _prefetchCtrl) return; // stale — a newer prefetch superseded this one
+      if (ctrl !== _prefetchCtrl) return;
       if (data.word && data.word.id !== forWord) {
         state.next = { ...data.word, intervals: data.intervals };
         state.nextHTML = buildCardHTML(state.next); // pre-render off critical path
@@ -346,6 +346,7 @@ function prefetchNext() {
 }
 
 async function fetchWord() {
+  if (state.animating) return;
   try {
     const res  = await fetch('/api/word');
     const data = await res.json();
@@ -546,21 +547,22 @@ async function submitRating(rating) {
     if (_pendingUndo && state.prev && doSubmitSettled) { _pendingUndo = false; _commitSwipe(); }
 
   } else {
-    // Fallback (no peek data): exit left + wait for API + enter from right (single-card)
+    // Fallback (no peek data): parallel slide — start exit immediately, stage cardNext
+    // as soon as API returns, then enter. Both run concurrently like the optimistic path.
     try {
       const prevHTML = card.innerHTML;
       const W = getCardW();
-      const [data] = await Promise.all([
-        submitWithRetry(wordId, rating),
-        card.animate(
-          [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
-          { duration: SLIDE_DUR, easing: EXIT_EASING, fill: 'forwards' }
-        ).finished,
-      ]);
+
+      const exitAnim = card.animate(
+        [{ transform: 'translateX(0)' }, { transform: `translateX(${-W}px)` }],
+        { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
+      );
+
+      const data = await submitWithRetry(wordId, rating);
 
       if (!data.word) {
+        exitAnim.cancel();
         card.style.transform = '';
-        card.getAnimations().forEach(a => a.cancel());
         card.classList.remove('loading');
         _pendingUndo = false;
         state.animating = false;
@@ -568,34 +570,42 @@ async function submitRating(rating) {
         return;
       }
 
-      // Snap card back to center, load new content
-      card.style.transform = '';
-      card.getAnimations().forEach(a => a.cancel());
+      // Stage cardNext with new content and start enter animation immediately —
+      // may overlap with exit animation still in progress.
+      state.stats    = data.stats;
+      state.progress = data.progress;
+      const newWord  = data.word;
+      _stopCurrent();
+      speakWord(newWord.word);
+      renderNextCard(buildCardHTML(newWord)); // unified staging via renderNextCard
+      cardNext.style.transform = `translateX(${W}px) translateY(-50%)`; // override offScreen to use current W
 
-      state.prev      = state.word;
-      state.prevHTML  = prevHTML;
-      state.word      = data.word;
-      state.stats     = data.stats;
-      state.progress  = data.progress;
-      state.next      = null;
-      state.nextHTML  = null;
-      card.innerHTML  = buildCardHTML(state.word);
-      renderStats();
+      const enterAnim = cardNext.animate(
+        [{ transform: `translateX(${W}px) translateY(-50%)` }, { transform: 'translateX(0) translateY(-50%)' }],
+        { duration: SLIDE_DUR, easing: RAIL_EASING, fill: 'forwards' }
+      );
+
+      await Promise.all([exitAnim.finished, enterAnim.finished]);
+
+      renderPrevCard(prevHTML, 'left');
+      state.prev     = state.word;
+      state.prevHTML = prevHTML;
+      state.word     = newWord;
+      state.next     = null;
+      state.nextHTML = null;
+      card.innerHTML = cardNext.innerHTML; // reuse already-rendered HTML, avoid second buildCardHTML
       setPhase(1);
-      speakWord(state.word.word);
-      renderPrevCard(state.prevHTML, 'left');
-
-      // Enter from right (single card) — buttons stay locked until animation completes
-      await card.animate(
-        [{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }],
-        { duration: SLIDE_DUR, easing: ENTER_EASING }
-      ).finished;
+      card.style.transform = '';
+      exitAnim.cancel();
+      renderNextCard(state.nextHTML); // stage next-next if prefetch landed during animation
 
       unlock();
       prefetchNext();
     } catch (e) {
       card.style.transform = '';
       card.getAnimations().forEach(a => a.cancel());
+      cardNext.getAnimations().forEach(a => a.cancel());
+      cardNext.style.visibility = 'hidden';
       _pendingUndo = false;
       unlock();
       showToast('提交失败，请检查网络', () => submitRating(rating));
