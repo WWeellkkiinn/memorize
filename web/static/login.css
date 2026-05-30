@@ -1,0 +1,107 @@
+:root {
+  --bg: #F3F4F8;
+  --card: #FFFFFF;
+  --ink: #1F2433;
+  --muted: #8A90A2;
+  --brand: #4F46E5;
+  --brand-press: #4338CA;
+  --error: #DC2626;
+  --line: #E4E6EE;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  min-height: 100dvh;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 32px 28px 28px;
+  box-shadow: 0 12px 40px rgba(31, 36, 51, 0.08);
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.auth-sub {
+  margin: 6px 0 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--ink);
+  background: #FBFBFD;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--brand);
+  background: #fff;
+}
+
+#submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px;
+  border: none;
+  border-radius: 12px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+#submit:hover { background: var(--brand-press); }
+#submit:active { transform: scale(0.99); }
+#submit:disabled { opacity: 0.6; cursor: default; }
+
+.error {
+  min-height: 18px;
+  margin: 12px 0 0;
+  color: var(--error);
+  font-size: 13px;
+  text-align: center;
+}

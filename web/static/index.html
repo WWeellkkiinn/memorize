@@ -4,15 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#F3F4F8">
+  <link rel="icon" href="/static/icon-192.png" type="image/png">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; media-src https://dict.youdao.com; script-src 'self'; object-src 'none'; base-uri 'self'">
   <title>Memorize</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=61">
+  <link rel="stylesheet" href="/static/style.css?v=62">
 </head>
 <body>
+  <div id="topbar">
+    <a id="admin-link" class="topbar-btn hidden" href="/admin">管理</a>
+    <button id="logout-btn" class="topbar-btn" type="button">登出</button>
+  </div>
   <div id="toast" class="hidden"></div>
   <div id="card-stage">
   <div id="card-prev" inert></div>
@@ -20,6 +28,6 @@
   <div id="card"></div>
 
   </div><!-- #card-stage -->
-  <script src="/static/app.js?v=64"></script>
+  <script src="/static/app.js?v=65"></script>
 </body>
 </html>

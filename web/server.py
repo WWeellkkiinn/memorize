@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import base64
+import logging
 import os
-import secrets
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fsrs import Rating
 from pydantic import BaseModel, Field
@@ -15,29 +15,58 @@ from pydantic import BaseModel, Field
 from memorize.config import DB_PATH
 from memorize.scheduler import WordScheduler
 from memorize.word_store import WordStore
+from web.auth import SESSION_TTL, AuthStore
 
-_AUTH_USER = os.environ.get("AUTH_USER", "")
-_AUTH_PASS = os.environ.get("AUTH_PASS", "")
-
-if not _AUTH_USER or not _AUTH_PASS:
-    raise RuntimeError("AUTH_USER and AUTH_PASS environment variables must be set")
-if len(_AUTH_PASS) < 8:
-    raise RuntimeError("AUTH_PASS must be at least 8 characters")
+log = logging.getLogger(__name__)
 
 _STATIC = Path(__file__).parent / "static"
+_COOKIE = "session"
+# Secure by default: cookie is only sent over HTTPS. Plain-HTTP local dev must
+# opt out with SECURE_COOKIES=0, otherwise the browser drops the session cookie.
+_SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1").lower() in ("1", "true", "yes")
+
+# Per-user in-memory schedulers. Each holds its own FSRS queue / undo state.
+# A WordScheduler instance is NOT thread-safe, so every user also gets a lock
+# that routes hold for the whole request — this serializes one user's concurrent
+# requests while different users still run in parallel. The registry lock only
+# guards creation of these entries.
+_schedulers: dict[int, WordScheduler] = {}
+_user_locks: dict[int, threading.Lock] = {}
+_registry_lock = threading.Lock()
 
 
-def _check_basic_auth(request: Request) -> bool:
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Basic "):
-        return False
-    try:
-        decoded = base64.b64decode(header[6:]).decode("utf-8")
-        username, password = decoded.split(":", 1)
-        return secrets.compare_digest(username.encode(), _AUTH_USER.encode()) and \
-               secrets.compare_digest(password.encode(), _AUTH_PASS.encode())
-    except Exception:
-        return False
+def _get_lock(user_id: int) -> threading.Lock:
+    # The lock is created once per user and never removed for the process lifetime.
+    # This is the key invariant: every request for a user — including one that
+    # rebuilds the scheduler after it was dropped — shares the SAME lock, so
+    # per-user serialization can never be split by two lock objects. The dict is
+    # bounded by the number of distinct users seen this process, which for this
+    # app's scale is negligible (and cleared on restart).
+    with _registry_lock:
+        lock = _user_locks.get(user_id)
+        if lock is None:
+            lock = _user_locks[user_id] = threading.Lock()
+        return lock
+
+
+def _ensure_scheduler(app: FastAPI, user_id: int) -> WordScheduler | None:
+    """Return the user's scheduler, building it on first use. Returns None if the
+    user no longer exists. MUST be called while holding that user's lock."""
+    with _registry_lock:
+        sch = _schedulers.get(user_id)
+    if sch is not None:
+        return sch
+    # Building fresh. Verify the user still exists before writing any per-user data:
+    # this runs under the user lock, which admin_delete_user also holds for the whole
+    # deletion, so a request that races a delete can't resurrect cards for a removed
+    # user. init_cards_for_user also backfills cards for words imported after signup.
+    if not app.state.auth.get_user_by_id(user_id):
+        return None
+    app.state.store.init_cards_for_user(user_id)
+    sch = WordScheduler(app.state.store, user_id=user_id)
+    with _registry_lock:
+        _schedulers[user_id] = sch
+    return sch
 
 
 def _compute_stage(word: dict) -> str:
@@ -53,42 +82,65 @@ def _compute_stage(word: dict) -> str:
     return "掌握"
 
 
-def _build_response(scheduler: WordScheduler, store: WordStore) -> dict:
+def _build_response(scheduler: WordScheduler, store: WordStore, user_id: int) -> dict:
     word = scheduler.current_word()
-    stats = store.get_today_stats()
+    stats = store.get_today_stats(user_id)
     if word:
         word = dict(word)
         word["stage"] = _compute_stage(word)
-        intervals = store.get_preview_intervals(word["id"])
+        intervals = store.get_preview_intervals(word["id"], user_id)
     else:
         intervals = None
-    progress = store.get_progress()
+    progress = store.get_progress(user_id)
     return {"word": word, "stats": stats, "intervals": intervals, "progress": progress}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store = WordStore(DB_PATH)
-    scheduler = WordScheduler(store)
+    auth = AuthStore(DB_PATH)
     app.state.store = store
-    app.state.scheduler = scheduler
+    app.state.auth = auth
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip()
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "")
+    if admin_email and admin_pass:
+        admin = auth.ensure_admin(admin_email, admin_pass)
+        # Bind legacy/desktop data (user 1) to the admin if ids line up; otherwise
+        # just make sure the admin has a full deck.
+        store.init_cards_for_user(admin["id"])
+        log.info("Admin account ensured: %s (id=%d)", admin_email, admin["id"])
+    elif auth.user_count() == 0:
+        log.warning(
+            "No users exist and ADMIN_EMAIL/ADMIN_PASSWORD not set — nobody can log in. "
+            "Set these env vars to bootstrap the first admin."
+        )
+    auth.purge_expired()
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-@app.middleware("http")
-async def basic_auth_middleware(request: Request, call_next):
-    if not _check_basic_auth(request):
-        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="memorize"'})
-    return await call_next(request)
+# ── Auth dependencies ─────────────────────────────────────────────────────────
+
+def current_user(request: Request) -> dict:
+    sid = request.cookies.get(_COOKIE)
+    user = request.app.state.auth.get_session_user(sid)
+    if not user:
+        raise HTTPException(status_code=401, detail="not authenticated")
+    return user
+
+
+def require_admin(user: dict = Depends(current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="admin only")
+    return user
 
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
-    # frame-ancestors only takes effect via HTTP header, not <meta> — block clickjacking.
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     response.headers["X-Frame-Options"] = "DENY"
     return response
@@ -97,27 +149,79 @@ async def security_headers_middleware(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 
+# ── Pages ─────────────────────────────────────────────────────────────────────
+
 @app.get("/")
 def root():
     return FileResponse(_STATIC / "index.html")
 
 
-@app.get("/api/word")
-def get_word():
-    return _build_response(app.state.scheduler, app.state.store)
+@app.get("/login")
+def login_page():
+    return FileResponse(_STATIC / "login.html")
 
 
-@app.get("/api/peek")
-def peek_word():
-    word = app.state.scheduler.peek_next()
-    if word:
-        word = dict(word)
-        word["stage"] = _compute_stage(word)
-        intervals = app.state.store.get_preview_intervals(word["id"])
-    else:
-        intervals = None
-    return {"word": word, "intervals": intervals}
+@app.get("/admin")
+def admin_page():
+    return FileResponse(_STATIC / "admin.html")
 
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(_STATIC / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/service-worker.js")
+def service_worker():
+    return FileResponse(_STATIC / "service-worker.js", media_type="application/javascript")
+
+
+# ── Auth API ──────────────────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+def _set_session_cookie(response: Response, sid: str) -> None:
+    response.set_cookie(
+        key=_COOKIE,
+        value=sid,
+        httponly=True,
+        samesite="lax",
+        secure=_SECURE_COOKIES,
+        max_age=int(SESSION_TTL.total_seconds()),
+        path="/",
+    )
+
+
+@app.post("/api/auth/login")
+def login(body: LoginRequest, request: Request):
+    auth: AuthStore = request.app.state.auth
+    user = auth.verify_login(body.email, body.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    sid = auth.create_session(user["id"])
+    response = JSONResponse({"user": user})
+    _set_session_cookie(response, sid)
+    return response
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    sid = request.cookies.get(_COOKIE)
+    request.app.state.auth.delete_session(sid)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(_COOKIE, path="/", secure=_SECURE_COOKIES, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(current_user)):
+    return {"user": user}
+
+
+# ── Word API (per-user) ───────────────────────────────────────────────────────
 
 class RateRequest(BaseModel):
     word_id: int
@@ -128,20 +232,136 @@ class EmptyRequest(BaseModel):
     pass
 
 
+def _require_scheduler(request: Request, user_id: int) -> tuple[WordScheduler, threading.Lock]:
+    """Resolve (scheduler, lock) under the user lock, 401-ing if the user is gone."""
+    lock = _get_lock(user_id)
+    lock.acquire()
+    try:
+        sch = _ensure_scheduler(request.app, user_id)
+    except BaseException:
+        lock.release()  # never leak the lock if provisioning blows up
+        raise
+    if sch is None:
+        lock.release()
+        raise HTTPException(status_code=401, detail="账号已不存在")
+    return sch, lock
+
+
+@app.get("/api/word")
+def get_word(request: Request, user: dict = Depends(current_user)):
+    sch, lock = _require_scheduler(request, user["id"])
+    try:
+        return _build_response(sch, request.app.state.store, user["id"])
+    finally:
+        lock.release()
+
+
+@app.get("/api/peek")
+def peek_word(request: Request, user: dict = Depends(current_user)):
+    sch, lock = _require_scheduler(request, user["id"])
+    try:
+        word = sch.peek_next()
+        if word:
+            word = dict(word)
+            word["stage"] = _compute_stage(word)
+            intervals = request.app.state.store.get_preview_intervals(word["id"], user["id"])
+        else:
+            intervals = None
+    finally:
+        lock.release()
+    return {"word": word, "intervals": intervals}
+
+
 @app.post("/api/rate")
-def rate_word(body: RateRequest):
-    app.state.scheduler.rate(body.word_id, Rating(body.rating))
-    return _build_response(app.state.scheduler, app.state.store)
+def rate_word(body: RateRequest, request: Request, user: dict = Depends(current_user)):
+    sch, lock = _require_scheduler(request, user["id"])
+    try:
+        sch.rate(body.word_id, Rating(body.rating))
+        return _build_response(sch, request.app.state.store, user["id"])
+    finally:
+        lock.release()
 
 
 @app.post("/api/undo")
-def undo_word(body: EmptyRequest):
-    word = app.state.scheduler.undo_last_rating()
-    if not word:
-        return {"word": None, "stats": None, "intervals": None, "progress": None}
-    word = dict(word)
-    word["stage"] = _compute_stage(word)
-    intervals = app.state.store.get_preview_intervals(word["id"])
-    stats = app.state.store.get_today_stats()
-    progress = app.state.store.get_progress()
+def undo_word(body: EmptyRequest, request: Request, user: dict = Depends(current_user)):
+    sch, lock = _require_scheduler(request, user["id"])
+    store = request.app.state.store
+    try:
+        word = sch.undo_last_rating()
+        if not word:
+            return {"word": None, "stats": None, "intervals": None, "progress": None}
+        word = dict(word)
+        word["stage"] = _compute_stage(word)
+        intervals = store.get_preview_intervals(word["id"], user["id"])
+        stats = store.get_today_stats(user["id"])
+        progress = store.get_progress(user["id"])
+    finally:
+        lock.release()
     return {"word": word, "stats": stats, "intervals": intervals, "progress": progress}
+
+
+# ── Admin API ─────────────────────────────────────────────────────────────────
+
+class CreateUserRequest(BaseModel):
+    email: str
+    password: str
+    display_name: str = ""
+    is_admin: bool = False
+
+
+class SetPasswordRequest(BaseModel):
+    password: str
+
+
+@app.get("/api/admin/users")
+def admin_list_users(request: Request, admin: dict = Depends(require_admin)):
+    return {"users": request.app.state.auth.list_users()}
+
+
+@app.post("/api/admin/users")
+def admin_create_user(body: CreateUserRequest, request: Request, admin: dict = Depends(require_admin)):
+    auth: AuthStore = request.app.state.auth
+    try:
+        user = auth.create_user(body.email, body.password, body.display_name, body.is_admin)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # Give the new user a full deck up front.
+    request.app.state.store.init_cards_for_user(user["id"])
+    return {"user": user}
+
+
+@app.post("/api/admin/users/{user_id}/password")
+def admin_set_password(user_id: int, body: SetPasswordRequest, request: Request,
+                       admin: dict = Depends(require_admin)):
+    auth: AuthStore = request.app.state.auth
+    if not auth.get_user_by_id(user_id):
+        raise HTTPException(status_code=404, detail="user not found")
+    try:
+        auth.set_password(user_id, body.password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # set_password already deleted the user's sessions (forcing re-login). The
+    # in-memory scheduler holds only password-independent FSRS queue state, so it's
+    # safe to keep — no eviction needed.
+    return {"ok": True}
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, request: Request, admin: dict = Depends(require_admin)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="不能删除自己")
+    auth: AuthStore = request.app.state.auth
+    if not auth.get_user_by_id(user_id):
+        raise HTTPException(status_code=404, detail="user not found")
+    # Hold the user's lock across the whole deletion so it can't interleave with an
+    # in-flight rate/undo/word request for that user. The lock object itself is
+    # never removed (see _get_lock), so dropping the scheduler here can't split
+    # the lock: any straggler request rebuilds a fresh empty scheduler under the
+    # same lock and simply finds no cards (data already gone) — a harmless no-op.
+    lock = _get_lock(user_id)
+    with lock:
+        auth.delete_user(user_id)
+        request.app.state.store.delete_user_data(user_id)
+        with _registry_lock:
+            _schedulers.pop(user_id, None)
+    return {"ok": True}

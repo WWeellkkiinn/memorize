@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F3F4F8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>用户管理 · Memorize</title>
+  <link rel="icon" href="/static/icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/admin.css?v=1">
+</head>
+<body>
+  <header class="bar">
+    <h1>用户管理</h1>
+    <a class="link" href="/">返回</a>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>新建用户</h2>
+      <form id="create-form">
+        <input id="c-email" type="email" required placeholder="邮箱 you@example.com" autocomplete="off">
+        <input id="c-name" type="text" placeholder="显示名（可选）" autocomplete="off">
+        <input id="c-pass" type="text" required minlength="8" placeholder="初始密码（≥8 位）" autocomplete="off">
+        <label class="checkbox"><input id="c-admin" type="checkbox"> 管理员</label>
+        <button type="submit">创建</button>
+      </form>
+      <p id="create-msg" class="msg"></p>
+    </section>
+
+    <section class="panel">
+      <h2>用户列表</h2>
+      <table id="users">
+        <thead>
+          <tr><th>ID</th><th>邮箱</th><th>名称</th><th>角色</th><th>操作</th></tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/admin.js?v=1"></script>
+</body>
+</html>

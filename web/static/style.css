@@ -377,3 +377,38 @@ body {
 
 .hidden    { display: none !important; }
 .invisible { visibility: hidden !important; pointer-events: none !important; }
+
+/* ── Top bar (logout / admin) ──────────────────────────────────────────────── */
+#topbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  z-index: 50;
+}
+
+.topbar-btn {
+  font-family: 'Lexend', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.topbar-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.topbar-btn.hidden { display: none; }

@@ -185,6 +185,7 @@ async function submitWithRetry(wordId, rating, maxRetries = 3) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ word_id: wordId, rating }),
       });
+      guard401(res);
       if (!res.ok) throw new Error('status ' + res.status);
       hideToast();
       return await res.json();
@@ -349,6 +350,7 @@ async function fetchWord() {
   if (state.animating) return;
   try {
     const res  = await fetch('/api/word');
+    guard401(res);
     const data = await res.json();
     state.word      = data.word;
     state.stats     = data.stats;
@@ -815,6 +817,44 @@ card.addEventListener('keydown', e => {
   }
 });
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
+// ── Auth / boot ─────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', fetchWord);
+function redirectToLogin() {
+  location.replace('/login');
+}
+
+// Any API call may 401 if the session expired mid-use — bounce to login.
+function guard401(res) {
+  if (res.status === 401) { redirectToLogin(); throw new Error('unauthenticated'); }
+  return res;
+}
+
+function wireTopbar(user) {
+  const adminLink = document.getElementById('admin-link');
+  if (adminLink && user && user.is_admin) adminLink.classList.remove('hidden');
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
+      redirectToLogin();
+    });
+  }
+}
+
+async function boot() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+  let me;
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return redirectToLogin();
+    me = (await res.json()).user;
+  } catch (_) {
+    return redirectToLogin();
+  }
+  wireTopbar(me);
+  fetchWord();
+}
+
+document.addEventListener('DOMContentLoaded', boot);

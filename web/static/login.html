@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#F3F4F8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>登录 · Memorize</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/login.css?v=1">
+</head>
+<body>
+  <main class="auth-card">
+    <h1 class="auth-title">Memorize</h1>
+    <p class="auth-sub">登录以同步你的复习进度</p>
+    <form id="login-form" autocomplete="on">
+      <label class="field">
+        <span>邮箱</span>
+        <input id="email" name="email" type="email" required autocomplete="username" inputmode="email" placeholder="you@example.com">
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••">
+      </label>
+      <button id="submit" type="submit">登 录</button>
+      <p id="error" class="error" role="alert"></p>
+    </form>
+  </main>
+  <script src="/static/login.js?v=1"></script>
+</body>
+</html>

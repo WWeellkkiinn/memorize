@@ -8,7 +8,7 @@ from collections import deque
 
 from fsrs import Rating
 
-from memorize.word_store import WordStore
+from memorize.word_store import DEFAULT_USER_ID, WordStore
 
 log = logging.getLogger(__name__)
 
@@ -17,8 +17,9 @@ _EMPTY_FILL_COOLDOWN = 5.0  # seconds — skip _fill_queue if last refill return
 
 
 class WordScheduler:
-    def __init__(self, store: WordStore) -> None:
+    def __init__(self, store: WordStore, user_id: int = DEFAULT_USER_ID) -> None:
         self._store = store
+        self._user_id = user_id
         self._queue: deque[int] = deque()
         self._current_id: int | None = None
         self._peeked_word: dict | None = None  # cached to avoid extra DB read in _pick_next
@@ -36,23 +37,23 @@ class WordScheduler:
         self._current_id = word_id
         if word_id is None:
             return None
-        return self._store.get_word(word_id)
+        return self._store.get_word(word_id, self._user_id)
 
     def current_word(self) -> dict | None:
         """Return the currently displayed word dict, advancing if none set yet."""
         if self._current_id is None:
             return self.advance()
-        word = self._store.get_word(self._current_id)
+        word = self._store.get_word(self._current_id, self._user_id)
         if word is None:
             return self.advance()
         return word
 
     def rate(self, word_id: int, rating: Rating) -> None:
         """Apply FSRS rating and update the queue without a full DB rebuild."""
-        snap = self._store.get_card_snapshot(word_id)
+        snap = self._store.get_card_snapshot(word_id, self._user_id)
         if snap:
             self._undo_snapshot = {"word_id": word_id, **snap}
-        self._store.rate(word_id, rating)
+        self._store.rate(word_id, rating, self._user_id)
         # DB state changed — invalidate any cached "no due words" short-circuit.
         self._empty_fill_until = 0.0
         if self._current_id == word_id:
@@ -65,11 +66,11 @@ class WordScheduler:
         """Pre-determine the next word without advancing state. Idempotent."""
         if self._peeked_word is None:
             next_id = self._preview_next()
-            self._peeked_word = self._store.get_word(next_id) if next_id else None
+            self._peeked_word = self._store.get_word(next_id, self._user_id) if next_id else None
         return self._peeked_word
 
     def get_today_stats(self) -> dict:
-        return self._store.get_today_stats()
+        return self._store.get_today_stats(self._user_id)
 
     def undo_last_rating(self) -> dict | None:
         """Restore previous FSRS state and return the word for display."""
@@ -77,7 +78,7 @@ class WordScheduler:
             return None
         snap = self._undo_snapshot
         self._undo_snapshot = None
-        self._store.undo_rate(snap["word_id"], snap)
+        self._store.undo_rate(snap["word_id"], snap, self._user_id)
         # Put the displaced word (B) back at queue front so it shows next after re-rating A.
         # B was removed from queue when it was selected; _current_id still holds B's id here.
         # Guard against duplicate enqueue: a refill between rate() and undo may have re-added B.
@@ -89,7 +90,7 @@ class WordScheduler:
             self._queue.appendleft(self._current_id)
         self._current_id = snap["word_id"]
         self._peeked_word = None  # invalidate stale preload — must re-peek after undo
-        return self._store.get_word(snap["word_id"])
+        return self._store.get_word(snap["word_id"], self._user_id)
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
@@ -107,10 +108,10 @@ class WordScheduler:
         for wid in self._queue:
             if wid != self._current_id:
                 return wid
-        new_words = self._store.get_new_words(limit=1)
+        new_words = self._store.get_new_words(limit=1, user_id=self._user_id)
         if new_words:
             return new_words[0]["id"]
-        candidates = self._store.get_lowest_stability_words(limit=10)
+        candidates = self._store.get_lowest_stability_words(limit=10, user_id=self._user_id)
         candidates = [w for w in candidates if w["id"] != self._current_id]
         if candidates:
             return random.choice(candidates[: max(1, len(candidates) // 2)])["id"]
@@ -123,7 +124,7 @@ class WordScheduler:
             word_id = word["id"]
             self._remove_from_queue(word_id)
             if word.get("reps", 0) == 0:
-                self._store.mark_introduced(word_id)
+                self._store.mark_introduced(word_id, self._user_id)
             return word_id
 
         # 1. Due words (real FSRS reviews)
@@ -136,14 +137,14 @@ class WordScheduler:
             return self._queue.popleft()
 
         # 2. New words (no daily quota — user-paced)
-        new_words = self._store.get_new_words(limit=1)
+        new_words = self._store.get_new_words(limit=1, user_id=self._user_id)
         if new_words:
             word_id = new_words[0]["id"]
-            self._store.mark_introduced(word_id)
+            self._store.mark_introduced(word_id, self._user_id)
             return word_id
 
         # 3. Fallback: lowest-stability already-reviewed word (exclude current)
-        candidates = self._store.get_lowest_stability_words(limit=10)
+        candidates = self._store.get_lowest_stability_words(limit=10, user_id=self._user_id)
         candidates = [w for w in candidates if w["id"] != self._current_id]
         if candidates:
             return random.choice(candidates[: max(1, len(candidates) // 2)])["id"]
@@ -154,7 +155,7 @@ class WordScheduler:
         """Rebuild the in-memory due queue from DB. Throttled when DB just returned no due words."""
         if time.monotonic() < self._empty_fill_until:
             return
-        due = self._store.get_due_words(limit=_QUEUE_FILL)
+        due = self._store.get_due_words(limit=_QUEUE_FILL, user_id=self._user_id)
         seen: set[int] = set()
         new_queue: deque[int] = deque()
         for row in due:
