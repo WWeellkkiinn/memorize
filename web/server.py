@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fsrs import Rating
 from pydantic import BaseModel, Field
@@ -151,9 +151,17 @@ app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
+def _guarded_page(request: Request, filename: str):
+    """Serve an authenticated page, or 302 to /login when there's no valid session.
+    Server-side guard (defense in depth) — the page JS also redirects on 401."""
+    if request.app.state.auth.get_session_user(request.cookies.get(_COOKIE)) is None:
+        return RedirectResponse("/login", status_code=302)
+    return FileResponse(_STATIC / filename)
+
+
 @app.get("/")
-def root():
-    return FileResponse(_STATIC / "index.html")
+def root(request: Request):
+    return _guarded_page(request, "index.html")
 
 
 @app.get("/login")
@@ -162,8 +170,13 @@ def login_page():
 
 
 @app.get("/admin")
-def admin_page():
-    return FileResponse(_STATIC / "admin.html")
+def admin_page(request: Request):
+    return _guarded_page(request, "admin.html")
+
+
+@app.get("/profile")
+def profile_page(request: Request):
+    return _guarded_page(request, "profile.html")
 
 
 @app.get("/manifest.webmanifest")
@@ -219,6 +232,28 @@ def logout(request: Request):
 @app.get("/api/auth/me")
 def me(user: dict = Depends(current_user)):
     return {"user": user}
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/api/auth/password")
+def change_password(body: ChangePasswordRequest, request: Request,
+                    user: dict = Depends(current_user)):
+    auth: AuthStore = request.app.state.auth
+    if not auth.verify_login(user["email"], body.current_password):
+        raise HTTPException(status_code=400, detail="当前密码错误")
+    try:
+        auth.set_password(user["id"], body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # set_password revokes every session (including this one); the client must
+    # re-login with the new password, so clear the cookie here too.
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(_COOKIE, path="/", secure=_SECURE_COOKIES, httponly=True, samesite="lax")
+    return response
 
 
 # ── Word API (per-user) ───────────────────────────────────────────────────────

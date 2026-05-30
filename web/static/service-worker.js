@@ -1,10 +1,11 @@
 'use strict';
 
-const CACHE = 'memorize-v1';
+const CACHE = 'memorize-v2';
 const ASSETS = [
-  '/', '/login',
+  '/', '/login', '/profile',
   '/static/style.css', '/static/app.js',
   '/static/login.css', '/static/login.js',
+  '/static/profile.js',
   '/manifest.webmanifest',
   '/static/icon-192.png', '/static/icon-512.png',
 ];
