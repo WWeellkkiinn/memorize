@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -223,6 +223,10 @@ def _set_session_cookie(response: Response, sid: str) -> None:
     )
 
 
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(_COOKIE, path="/", secure=_SECURE_COOKIES, httponly=True, samesite="lax")
+
+
 @app.post("/api/auth/login")
 def login(body: LoginRequest, request: Request):
     auth: AuthStore = request.app.state.auth
@@ -240,7 +244,7 @@ def logout(request: Request):
     sid = request.cookies.get(_COOKIE)
     request.app.state.auth.delete_session(sid)
     response = JSONResponse({"ok": True})
-    response.delete_cookie(_COOKIE, path="/", secure=_SECURE_COOKIES, httponly=True, samesite="lax")
+    _clear_session_cookie(response)
     return response
 
 
@@ -267,7 +271,7 @@ def change_password(body: ChangePasswordRequest, request: Request,
     # set_password revokes every session (including this one); the client must
     # re-login with the new password, so clear the cookie here too.
     response = JSONResponse({"ok": True})
-    response.delete_cookie(_COOKIE, path="/", secure=_SECURE_COOKIES, httponly=True, samesite="lax")
+    _clear_session_cookie(response)
     return response
 
 
@@ -282,34 +286,28 @@ class EmptyRequest(BaseModel):
     pass
 
 
-def _require_scheduler(request: Request, user_id: int) -> tuple[WordScheduler, threading.Lock]:
-    """Resolve (scheduler, lock) under the user lock, 401-ing if the user is gone."""
+@contextmanager
+def _user_scheduler(request: Request, user_id: int):
+    """Yield the user's scheduler while holding their per-user lock; 401 if the
+    user no longer exists. `with lock` guarantees release on every path, including
+    a provisioning error or the 401 below."""
     lock = _get_lock(user_id)
-    lock.acquire()
-    try:
+    with lock:
         sch = _ensure_scheduler(request.app, user_id)
-    except BaseException:
-        lock.release()  # never leak the lock if provisioning blows up
-        raise
-    if sch is None:
-        lock.release()
-        raise HTTPException(status_code=401, detail="账号已不存在")
-    return sch, lock
+        if sch is None:
+            raise HTTPException(status_code=401, detail="账号已不存在")
+        yield sch
 
 
 @app.get("/api/word")
 def get_word(request: Request, user: dict = Depends(current_user)):
-    sch, lock = _require_scheduler(request, user["id"])
-    try:
+    with _user_scheduler(request, user["id"]) as sch:
         return _build_response(sch, request.app.state.store, user["id"])
-    finally:
-        lock.release()
 
 
 @app.get("/api/peek")
 def peek_word(request: Request, user: dict = Depends(current_user)):
-    sch, lock = _require_scheduler(request, user["id"])
-    try:
+    with _user_scheduler(request, user["id"]) as sch:
         word = sch.peek_next()
         if word:
             word = dict(word)
@@ -317,26 +315,20 @@ def peek_word(request: Request, user: dict = Depends(current_user)):
             intervals = request.app.state.store.get_preview_intervals(word["id"], user["id"])
         else:
             intervals = None
-    finally:
-        lock.release()
     return {"word": word, "intervals": intervals}
 
 
 @app.post("/api/rate")
 def rate_word(body: RateRequest, request: Request, user: dict = Depends(current_user)):
-    sch, lock = _require_scheduler(request, user["id"])
-    try:
+    with _user_scheduler(request, user["id"]) as sch:
         sch.rate(body.word_id, Rating(body.rating))
         return _build_response(sch, request.app.state.store, user["id"])
-    finally:
-        lock.release()
 
 
 @app.post("/api/undo")
 def undo_word(body: EmptyRequest, request: Request, user: dict = Depends(current_user)):
-    sch, lock = _require_scheduler(request, user["id"])
     store = request.app.state.store
-    try:
+    with _user_scheduler(request, user["id"]) as sch:
         word = sch.undo_last_rating()
         if not word:
             return {"word": None, "stats": None, "intervals": None, "progress": None}
@@ -345,8 +337,6 @@ def undo_word(body: EmptyRequest, request: Request, user: dict = Depends(current
         intervals = store.get_preview_intervals(word["id"], user["id"])
         stats = store.get_today_stats(user["id"])
         progress = store.get_progress(user["id"])
-    finally:
-        lock.release()
     return {"word": word, "stats": stats, "intervals": intervals, "progress": progress}
 
 

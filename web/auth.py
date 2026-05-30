@@ -198,16 +198,19 @@ class AuthStore:
             ).fetchone()
             if not row:
                 return None
-            if datetime.fromisoformat(row["expires_at"]) < now:
+            expires = datetime.fromisoformat(row["expires_at"])
+            if expires < now:
                 conn.execute("DELETE FROM sessions WHERE id=?", (session_id,))
                 conn.commit()
                 return None
-            # Rolling renewal: extend the window on activity.
-            conn.execute(
-                "UPDATE sessions SET expires_at=? WHERE id=?",
-                (_iso(now + SESSION_TTL), session_id),
-            )
-            conn.commit()
+            # Rolling renewal, throttled: only slide the window once it's past the
+            # halfway point, so the common (per-request) path stays read-only.
+            if expires - now < SESSION_TTL / 2:
+                conn.execute(
+                    "UPDATE sessions SET expires_at=? WHERE id=?",
+                    (_iso(now + SESSION_TTL), session_id),
+                )
+                conn.commit()
         return _user_dict(row)
 
     def delete_session(self, session_id: str | None) -> None:
