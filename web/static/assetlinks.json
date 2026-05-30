@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "best.welkin.memorize.twa",
+        "sha256_cert_fingerprints": ["EE:DC:AF:18:8C:6E:33:F2:AD:5F:52:A2:E5:DB:40:77:9F:36:47:0E:5A:F3:29:E1:F5:99:4C:B1:92:E5:18:C9"]
+      }
+    }]

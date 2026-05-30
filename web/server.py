@@ -189,6 +189,21 @@ def service_worker():
     return FileResponse(_STATIC / "service-worker.js", media_type="application/javascript")
 
 
+@app.get("/.well-known/assetlinks.json")
+def asset_links():
+    # Digital Asset Links — lets the signed TWA APK drop the browser address bar.
+    return FileResponse(_STATIC / "assetlinks.json", media_type="application/json")
+
+
+@app.get("/memorize.apk")
+def download_apk():
+    return FileResponse(
+        _STATIC / "memorize.apk",
+        media_type="application/vnd.android.package-archive",
+        filename="memorize.apk",
+    )
+
+
 # ── Auth API ──────────────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
