@@ -24,6 +24,7 @@ _COOKIE = "session"
 # Secure by default: cookie is only sent over HTTPS. Plain-HTTP local dev must
 # opt out with SECURE_COOKIES=0, otherwise the browser drops the session cookie.
 _SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "1").lower() in ("1", "true", "yes")
+_APP_VERSION = os.environ.get("APP_VERSION", "dev")
 
 # Per-user in-memory schedulers. Each holds its own FSRS queue / undo state.
 # A WordScheduler instance is NOT thread-safe, so every user also gets a lock
@@ -169,14 +170,29 @@ def login_page():
     return FileResponse(_STATIC / "login.html")
 
 
+def _settings_redirect(request: Request, target: str, login_next: str):
+    """Single-page now: these legacy page routes open the in-page overlay. /admin
+    lands on the 用户管理 tab (#admin); the rest on #settings. The fragment never
+    reaches the server, so for a logged-out visitor we carry it through ?next
+    instead of silently dropping them on the card view after login."""
+    if request.app.state.auth.get_session_user(request.cookies.get(_COOKIE)) is None:
+        return RedirectResponse(f"/login?next={login_next}", status_code=302)
+    return RedirectResponse(target, status_code=302)
+
+
 @app.get("/admin")
 def admin_page(request: Request):
-    return _guarded_page(request, "admin.html")
+    return _settings_redirect(request, "/#admin", "/%23admin")
+
+
+@app.get("/settings")
+def settings_page(request: Request):
+    return _settings_redirect(request, "/#settings", "/%23settings")
 
 
 @app.get("/profile")
 def profile_page(request: Request):
-    return _guarded_page(request, "profile.html")
+    return _settings_redirect(request, "/#settings", "/%23settings")
 
 
 @app.get("/manifest.webmanifest")
@@ -205,6 +221,11 @@ def download_apk():
 
 
 # ── Auth API ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/version")
+def api_version():
+    return {"version": _APP_VERSION}
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -321,8 +342,17 @@ def peek_word(request: Request, user: dict = Depends(current_user)):
 @app.post("/api/rate")
 def rate_word(body: RateRequest, request: Request, user: dict = Depends(current_user)):
     with _user_scheduler(request, user["id"]) as sch:
+        store = request.app.state.store
         sch.rate(body.word_id, Rating(body.rating))
-        return _build_response(sch, request.app.state.store, user["id"])
+        resp = _build_response(sch, store, user["id"])
+        nxt = sch.peek_next()
+        if nxt:
+            nxt = dict(nxt)
+            nxt["stage"] = _compute_stage(nxt)
+            resp["next"] = {"word": nxt, "intervals": store.get_preview_intervals(nxt["id"], user["id"])}
+        else:
+            resp["next"] = {"word": None, "intervals": None}
+        return resp
 
 
 @app.post("/api/undo")

@@ -1,0 +1,189 @@
+/* Settings overlay — a full-screen sheet over the card view. The card stays
+   mounted underneath (no navigation), so closing the sheet costs zero reload.
+   Component classes (.section/.btn/.field/.input/.msg) come from ui.css; this
+   file only defines the sheet shell, tab bar, and user-management cards.
+   The card body is Lora; force Lexend inside the overlay so forms match the
+   look of the old standalone settings page. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  font-family: 'Lexend', system-ui, -apple-system, sans-serif;
+}
+.overlay.hidden { display: none !important; }
+
+.overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.overlay.show .overlay__backdrop { opacity: 1; }
+
+.overlay__sheet {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  margin: auto auto 0;            /* bottom sheet on phones */
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.22);
+  transform: translateY(100%);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.overlay.show .overlay__sheet { transform: translateY(0); }
+
+@media (min-width: 600px) {
+  .overlay__sheet {
+    margin: auto;
+    border-radius: 20px;
+    max-height: 88dvh;
+    transform: translateY(14px) scale(0.98);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .overlay.show .overlay__sheet { transform: none; opacity: 1; }
+}
+
+.overlay__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 10px;
+}
+.overlay__title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.overlay__close {
+  -webkit-tap-highlight-color: transparent;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.overlay__close:active { background: var(--accent-soft); transform: scale(0.94); }
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+
+.tabbar {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  -webkit-tap-highlight-color: transparent;
+  flex: 1;
+  padding: 12px 6px 11px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab[hidden] { display: none; }
+
+.overlay__body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
+}
+.tabpane { display: none; }
+.tabpane.is-active { display: block; }
+
+/* ── User-management cards ───────────────────────────────────────────────── */
+
+.create-form { margin-top: 12px; }
+.create-form.hidden { display: none; }
+
+.user-list { display: flex; flex-direction: column; gap: 10px; }
+
+.user-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.user-card__head {
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 15px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.user-card__email {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+.user-card__badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.user-card__badge.is-admin { color: var(--accent); background: var(--accent-soft); }
+.user-card__badge.is-user { color: var(--text-muted); background: var(--bg-active); }
+.user-card__chevron {
+  color: var(--text-muted);
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+.user-card.is-open .user-card__chevron { transform: rotate(90deg); }
+
+.user-card__detail {
+  display: none;
+  padding: 0 15px 14px;
+  border-top: 1px solid var(--border);
+}
+.user-card.is-open .user-card__detail { display: block; }
+
+.user-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 10px 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.user-card__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.reset-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  width: 100%;
+}
+.reset-inline .input { flex: 1 1 180px; min-width: 150px; }
+
+.btn-sm { padding: 8px 12px; font-size: 13px; }

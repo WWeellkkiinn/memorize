@@ -160,16 +160,14 @@ class AuthStore:
         return _user_dict(row)
 
     def ensure_admin(self, email: str, password: str) -> dict:
-        """Create the admin from env if missing, or refresh its password if present."""
+        """Create the admin from env on first run only. If the account already exists
+        it is returned untouched — neither its password nor its role is overwritten,
+        so changes made in-app survive restarts."""
         email = email.strip().lower()
         with self._conn() as conn:
             row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
         if row:
-            self.set_password(row["id"], password)
-            with self._conn() as conn:
-                conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (row["id"],))
-                conn.commit()
-            return self.get_user_by_id(row["id"])  # type: ignore[return-value]
+            return _user_dict(row)
         return self.create_user(email, password, is_admin=True)
 
     # ── Sessions ───────────────────────────────────────────────────────────────

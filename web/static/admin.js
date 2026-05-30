@@ -1,112 +1,166 @@
 'use strict';
 
-const usersBody = document.getElementById('users-body');
-const createForm = document.getElementById('create-form');
-const createMsg = document.getElementById('create-msg');
+/* User-management tab inside the settings overlay. Admin-only, lazy-loaded the
+   first time the 用户管理 tab is shown. Renders one card per user (tap to expand
+   detail + actions). Relies on window.UI (ui.js); driven by window.AdminTab,
+   which settings.js calls: enable() once the viewer is confirmed admin, and
+   ensureLoaded() when the tab is first opened. */
 
-function setMsg(el, text, ok) {
-  el.textContent = text;
-  el.className = 'msg ' + (ok ? 'ok' : 'err');
-}
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let enabled = false;
+  let loaded = false;
 
-async function api(path, opts) {
-  const res = await fetch(path, opts);
-  if (res.status === 401) { location.replace('/login'); throw new Error('unauth'); }
-  if (res.status === 403) { location.replace('/'); throw new Error('forbidden'); }
-  return res;
-}
-
-function el(tag, props, ...children) {
-  const node = document.createElement(tag);
-  if (props) Object.assign(node, props);
-  for (const c of children) node.append(c);
-  return node;
-}
-
-function renderUsers(users) {
-  usersBody.replaceChildren();
-  for (const u of users) {
-    const role = u.is_admin ? el('span', { className: 'badge', textContent: '管理员' }) : document.createTextNode('用户');
-
-    const resetBtn = el('button', { className: 'btn-ghost', textContent: '重置密码' });
-    resetBtn.addEventListener('click', () => resetPassword(u));
-    const delBtn = el('button', { className: 'btn-danger', textContent: '删除' });
-    delBtn.addEventListener('click', () => deleteUser(u));
-
-    const actions = el('div', { className: 'row-actions' }, resetBtn, delBtn);
-
-    usersBody.append(el('tr', null,
-      el('td', { textContent: String(u.id) }),
-      el('td', { textContent: u.email }),
-      el('td', { textContent: u.display_name || '' }),
-      el('td', null, role),
-      el('td', null, actions),
-    ));
+  function el(tag, props, ...kids) {
+    const node = document.createElement(tag);
+    if (props) Object.assign(node, props);
+    for (const k of kids) if (k != null) node.append(k);
+    return node;
   }
-}
 
-async function loadUsers() {
-  try {
-    const res = await api('/api/admin/users');
-    const data = await res.json();
-    renderUsers(data.users || []);
-  } catch (_) {}
-}
-
-createForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  setMsg(createMsg, '', true);
-  const body = {
-    email: document.getElementById('c-email').value.trim(),
-    display_name: document.getElementById('c-name').value.trim(),
-    password: document.getElementById('c-pass').value,
-    is_admin: document.getElementById('c-admin').checked,
-  };
-  try {
-    const res = await api('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+  function badge(isAdmin) {
+    return el('span', {
+      className: 'user-card__badge ' + (isAdmin ? 'is-admin' : 'is-user'),
+      textContent: isAdmin ? '管理员' : '普通',
     });
-    if (res.ok) {
-      setMsg(createMsg, '创建成功', true);
-      createForm.reset();
-      loadUsers();
-    } else {
-      let msg = '创建失败';
-      try { msg = (await res.json()).detail || msg; } catch (_) {}
-      setMsg(createMsg, msg, false);
+  }
+
+  function renderUser(u) {
+    const card = el('div', { className: 'user-card' });
+
+    const head = el('button', { type: 'button', className: 'user-card__head' },
+      el('span', { className: 'user-card__email', textContent: u.email }),
+      badge(u.is_admin),
+      el('span', { className: 'user-card__chevron', textContent: '›' }),
+    );
+    head.addEventListener('click', () => card.classList.toggle('is-open'));
+
+    const meta = el('div', { className: 'user-card__meta' },
+      el('span', { textContent: 'ID ' + u.id }),
+      el('span', { textContent: '注册 ' + (u.created_at ? String(u.created_at).slice(0, 10) : '—') }),
+    );
+
+    const resetBtn = el('button', { type: 'button', className: 'btn btn--soft btn-sm', textContent: '重置密码' });
+    const delBtn = el('button', { type: 'button', className: 'btn btn--danger btn-sm', textContent: '删除' });
+    const actions = el('div', { className: 'user-card__actions' }, resetBtn, delBtn);
+    const detail = el('div', { className: 'user-card__detail' }, meta, actions);
+
+    resetBtn.addEventListener('click', () => toggleReset(u, detail));
+    delBtn.addEventListener('click', () => removeUser(u));
+
+    card.append(head, detail);
+    return card;
+  }
+
+  function toggleReset(u, detail) {
+    const existing = detail.querySelector('.reset-inline');
+    if (existing) { existing.remove(); return; }
+
+    const input = el('input', { type: 'text', className: 'input', placeholder: '新密码（≥8 位）', autocomplete: 'off' });
+    const ok = el('button', { type: 'button', className: 'btn btn--primary btn-sm', textContent: '确认' });
+    const cancel = el('button', { type: 'button', className: 'btn btn--pill btn-sm', textContent: '取消' });
+    const row = el('div', { className: 'reset-inline' }, input, ok, cancel);
+
+    cancel.addEventListener('click', () => row.remove());
+    ok.addEventListener('click', async () => {
+      const pw = input.value;
+      if (pw.length < 8) { UI.toast('密码至少 8 位'); return; }
+      ok.disabled = true;
+      try {
+        await UI.api(`/api/admin/users/${u.id}/password`, { method: 'POST', body: { password: pw } });
+        UI.toast('密码已重置');
+        row.remove();
+      } catch (err) {
+        UI.toast(err.message);
+        ok.disabled = false;
+      }
+    });
+
+    detail.append(row);
+    input.focus();
+  }
+
+  async function removeUser(u) {
+    const ok = await UI.confirm({
+      title: '删除用户？',
+      desc: `将永久删除 ${u.email} 的账号及其全部复习进度，无法恢复。`,
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await UI.api(`/api/admin/users/${u.id}`, { method: 'DELETE' });
+      UI.toast('已删除');
+      await load();
+    } catch (err) {
+      UI.toast(err.message);
     }
-  } catch (_) {
-    setMsg(createMsg, '网络错误', false);
   }
-});
 
-async function resetPassword(u) {
-  const pw = prompt(`为 ${u.email} 设置新密码（≥8 位）：`);
-  if (!pw) return;
-  const res = await api(`/api/admin/users/${u.id}/password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw }),
-  });
-  if (res.ok) alert('密码已更新，该用户已被登出');
-  else {
-    let msg = '更新失败';
-    try { msg = (await res.json()).detail || msg; } catch (_) {}
-    alert(msg);
+  async function load() {
+    try {
+      const data = await UI.api('/api/admin/users');
+      const wrap = $('user-list');
+      wrap.replaceChildren();
+      for (const u of (data.users || [])) wrap.append(renderUser(u));
+      loaded = true;
+    } catch (err) {
+      UI.toast(err.message);
+    }
   }
-}
 
-async function deleteUser(u) {
-  if (!confirm(`确定删除用户 ${u.email}？该用户的复习进度将一并删除。`)) return;
-  const res = await api(`/api/admin/users/${u.id}`, { method: 'DELETE' });
-  if (res.ok) loadUsers();
-  else {
-    let msg = '删除失败';
-    try { msg = (await res.json()).detail || msg; } catch (_) {}
-    alert(msg);
+  // ── Create user (collapsible form) ────────────────────────────────────────
+  function initCreate() {
+    const toggle = $('create-toggle');
+    const form = $('create-form');
+    const chevron = toggle.querySelector('.nav-row__chevron');
+
+    toggle.addEventListener('click', () => {
+      form.classList.toggle('hidden');
+      chevron.textContent = form.classList.contains('hidden') ? '＋' : '−';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = $('c-email').value.trim();
+      const password = $('c-pass').value;
+      const msg = $('create-msg');
+      const btn = $('create-btn');
+      msg.className = 'msg';
+      msg.textContent = '';
+      if (!email) { msg.className = 'msg msg--error'; msg.textContent = '请输入邮箱'; return; }
+      if (password.length < 8) { msg.className = 'msg msg--error'; msg.textContent = '密码至少 8 位'; return; }
+
+      btn.disabled = true;
+      try {
+        await UI.api('/api/admin/users', {
+          method: 'POST',
+          body: { email, password, is_admin: $('c-admin').checked },
+        });
+        UI.toast('已创建');
+        $('c-email').value = '';
+        $('c-pass').value = '';
+        $('c-admin').checked = false;
+        form.classList.add('hidden');
+        chevron.textContent = '＋';
+        await load();
+      } catch (err) {
+        msg.className = 'msg msg--error';
+        msg.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
-}
 
-loadUsers();
+  window.AdminTab = {
+    enable() {
+      if (enabled) return;
+      enabled = true;
+      initCreate();
+    },
+    ensureLoaded() {
+      if (!loaded) load();
+    },
+  };
+})();

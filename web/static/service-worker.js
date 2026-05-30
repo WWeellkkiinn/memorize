@@ -1,11 +1,12 @@
 'use strict';
 
-const CACHE = 'memorize-v2';
+const CACHE = 'memorize-v4';
 const ASSETS = [
-  '/', '/login', '/profile',
+  '/', '/login',
   '/static/style.css', '/static/app.js',
   '/static/login.css', '/static/login.js',
-  '/static/profile.js',
+  '/static/ui.css', '/static/ui.js',
+  '/static/overlay.css', '/static/settings.js', '/static/admin.js',
   '/manifest.webmanifest',
   '/static/icon-192.png', '/static/icon-512.png',
 ];
@@ -34,8 +35,15 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
 
   if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).catch(() => caches.match('/') || caches.match(e.request)));
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        caches.match('/', { ignoreSearch: true })
+          .then(cached => cached || caches.match(e.request, { ignoreSearch: true }))
+      )
+    );
     return;
   }
-  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
+  // ignoreSearch so cache-busting query strings (e.g. ?v=63) still match the
+  // precached path-only entries in ASSETS.
+  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(cached => cached || fetch(e.request)));
 });

@@ -7,6 +7,11 @@ services:
       - memorize-db:/data/memorize
     env_file: .env
     restart: unless-stopped
+    # Cap memory so a spike/leak in this container OOM-kills only itself instead of
+    # freezing the whole 1GB host. memswap_limit == mem_limit disables swap for the
+    # container, so it tips into a fast cgroup OOM-kill rather than swap-thrashing.
+    mem_limit: 512m
+    memswap_limit: 512m
 
 volumes:
   memorize-db:

@@ -17,5 +17,14 @@ data/words.txt
 data/*.md
 data/colingoldberg_morphemes.json
 CLAUDE.md
+CLAUDE.local.md
 memorize-db/
 .claude/
+
+# 本地开发/测试工具产物（不纳入版本库）
+node_modules/
+package.json
+package-lock.json
+.playwright-mcp/
+/_*.mjs
+/*.png

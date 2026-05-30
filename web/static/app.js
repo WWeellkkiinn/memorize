@@ -346,6 +346,21 @@ function prefetchNext() {
     .catch(() => { clearTimeout(timeoutId); });
 }
 
+function consumeNext(next) {
+  const forWord = state.word?.id;
+  if (next && next.word && next.word.id !== forWord) {
+    state.next = { ...next.word, intervals: next.intervals };
+    state.nextHTML = buildCardHTML(state.next);
+    if (!state.animating) renderNextCard(state.nextHTML);
+    preloadNextAudio(state.next.word);
+  } else {
+    state.next = null;
+    state.nextHTML = null;
+    if (!state.animating) renderNextCard(null);
+    _audioNext = null;
+  }
+}
+
 async function fetchWord() {
   if (state.animating) return;
   try {
@@ -518,7 +533,7 @@ async function submitRating(rating) {
           // Post-swap: buildCardHTML below already used latest state.stats, nothing to do.
           if (!swapDone) renderStats(cardNext);
         }
-        prefetchNext();
+        consumeNext(data.next);
         if (_pendingUndo && state.prev) { _pendingUndo = false; _commitSwipe(); }
       })
       .catch(() => {
@@ -829,31 +844,39 @@ function guard401(res) {
   return res;
 }
 
-function wireTopbar(user) {
-  const adminLink = document.getElementById('admin-link');
-  if (adminLink && user && user.is_admin) adminLink.classList.remove('hidden');
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
-      redirectToLogin();
-    });
-  }
-}
-
 async function boot() {
+  // First-paint loading state: show a single placeholder card and keep prev/next
+  // empty + hidden so they don't stack behind #card before the first word lands.
+  card.innerHTML = `<div class="card-loading">正在加载…</div>`;
+  renderPrevCard(null);
+  renderNextCard(null);
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    // ui.js（随设置浮层一起加载）接管 controllerchange + 更新提示；仅当它缺席时这里兜底。
+    if (!window.UI) {
+      let _reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_reloaded) return; _reloaded = true;
+        try { sessionStorage.setItem('mz_updated', '1'); } catch (_) {}
+        location.reload();
+      });
+    }
   }
-  let me;
+  if (!window.UI) {
+    try {
+      if (sessionStorage.getItem('mz_updated')) {
+        sessionStorage.removeItem('mz_updated');
+        showToast('已更新到最新版本');
+      }
+    } catch (_) {}
+  }
   try {
     const res = await fetch('/api/auth/me');
     if (!res.ok) return redirectToLogin();
-    me = (await res.json()).user;
   } catch (_) {
     return redirectToLogin();
   }
-  wireTopbar(me);
   fetchWord();
 }
 

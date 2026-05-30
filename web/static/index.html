@@ -14,13 +14,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=62">
+  <!-- ui.css 先于 style.css：让卡片页的 body 规则（Lora + 渐变背景）后置胜出，
+       同时把 ui.css 的组件类（.section/.btn/.field/.modal/.ui-toast）给浮层复用。 -->
+  <link rel="stylesheet" href="/static/ui.css?v=2">
+  <link rel="stylesheet" href="/static/style.css?v=64">
+  <link rel="stylesheet" href="/static/overlay.css?v=1">
 </head>
 <body>
   <div id="topbar">
-    <a id="admin-link" class="topbar-btn hidden" href="/admin">管理</a>
-    <a id="profile-link" class="topbar-btn" href="/profile">账号</a>
-    <button id="logout-btn" class="topbar-btn" type="button">登出</button>
+    <button id="settings-link" class="topbar-btn" type="button" aria-label="设置">⚙ 设置</button>
   </div>
   <div id="toast" class="hidden"></div>
   <div id="card-stage">
@@ -29,6 +31,105 @@
   <div id="card"></div>
 
   </div><!-- #card-stage -->
-  <script src="/static/app.js?v=65"></script>
+
+  <!-- 设置浮层：⚙ 打开，卡片视图留在底下 DOM 不卸载 -->
+  <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="设置" aria-hidden="true">
+    <div class="overlay__backdrop" data-close></div>
+    <div class="overlay__sheet">
+      <div class="overlay__head">
+        <h1 class="overlay__title">设置</h1>
+        <button class="overlay__close" type="button" data-close aria-label="关闭">✕</button>
+      </div>
+
+      <nav class="tabbar" role="tablist">
+        <button class="tab is-active" type="button" data-tab="account" role="tab">个人信息</button>
+        <button class="tab" type="button" data-tab="about" role="tab">关于·更新</button>
+        <button class="tab" type="button" data-tab="users" role="tab" hidden>用户管理</button>
+      </nav>
+
+      <div class="overlay__body">
+
+        <!-- Tab：个人信息 -->
+        <section class="tabpane is-active" data-pane="account">
+          <section class="section section--accent">
+            <p class="section__title">账号</p>
+            <div class="row">
+              <span class="row__label">邮箱</span>
+              <span class="row__value" id="acc-email">—</span>
+            </div>
+            <div class="row">
+              <span class="row__label">角色</span>
+              <span class="row__value" id="acc-role">—</span>
+            </div>
+          </section>
+
+          <section class="section">
+            <p class="section__title">修改密码</p>
+            <form id="pw-form">
+              <label class="field">
+                <span>当前密码</span>
+                <input class="input" id="pw-current" type="password" autocomplete="current-password">
+              </label>
+              <label class="field">
+                <span>新密码（≥8 位）</span>
+                <input class="input" id="pw-new" type="password" autocomplete="new-password">
+              </label>
+              <label class="field">
+                <span>确认新密码</span>
+                <input class="input" id="pw-confirm" type="password" autocomplete="new-password">
+              </label>
+              <p class="msg" id="pw-msg"></p>
+              <button class="btn btn--primary btn--block" id="pw-submit" type="submit">保存</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- Tab：关于·更新 -->
+        <section class="tabpane" data-pane="about">
+          <section class="section">
+            <p class="section__title">检测更新</p>
+            <div class="row">
+              <span class="row__label">当前版本</span>
+              <span class="row__value mono" id="app-version">—</span>
+            </div>
+            <button class="btn btn--soft btn--block" id="update-btn" type="button">检查更新</button>
+          </section>
+
+          <section class="section section--danger">
+            <button class="btn btn--danger btn--block" id="logout-btn" type="button">退出登录</button>
+          </section>
+        </section>
+
+        <!-- Tab：用户管理（仅管理员） -->
+        <section class="tabpane" data-pane="users">
+          <section class="section section--accent">
+            <button class="nav-row" id="create-toggle" type="button">
+              新建用户 <span class="nav-row__chevron">＋</span>
+            </button>
+            <form id="create-form" class="create-form hidden">
+              <label class="field">
+                <span>邮箱</span>
+                <input class="input" id="c-email" type="email" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>密码（≥8 位）</span>
+                <input class="input" id="c-pass" type="text" autocomplete="off">
+              </label>
+              <label class="checkbox"><input id="c-admin" type="checkbox"> 设为管理员</label>
+              <p class="msg" id="create-msg"></p>
+              <button class="btn btn--primary btn--block" id="create-btn" type="submit">创建</button>
+            </form>
+          </section>
+          <div id="user-list" class="user-list"></div>
+        </section>
+
+      </div><!-- .overlay__body -->
+    </div><!-- .overlay__sheet -->
+  </div><!-- #overlay -->
+
+  <script src="/static/ui.js?v=2"></script>
+  <script src="/static/app.js?v=67"></script>
+  <script src="/static/settings.js?v=2"></script>
+  <script src="/static/admin.js?v=2"></script>
 </body>
 </html>
