@@ -29,7 +29,8 @@
   width: 100%;
   max-width: 560px;
   margin: auto auto 0;            /* bottom sheet on phones */
-  max-height: 92dvh;
+  height: 92vh;                  /* 固定高度：三个 tab 等高，内容不足下方留空 */
+  height: 92dvh;                 /* dvh 支持时优先；不支持的旧 WebView 回退上面的 vh */
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -44,7 +45,8 @@
   .overlay__sheet {
     margin: auto;
     border-radius: 20px;
-    max-height: 88dvh;
+    height: 88vh;
+    height: 88dvh;
     transform: translateY(14px) scale(0.98);
     opacity: 0;
     transition: transform 0.2s ease, opacity 0.2s ease;
@@ -83,7 +85,11 @@
   gap: 4px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border);
+  /* 账号信息加载完（确认是否管理员）前隐藏整条 tab 栏，避免先显示两个再蹦出第三个；
+     用 visibility 而非 display 以保留高度，揭示时不抖动。 */
+  visibility: hidden;
 }
+.overlay.is-account-ready .tabbar { visibility: visible; }
 .tab {
   -webkit-tap-highlight-color: transparent;
   flex: 1;

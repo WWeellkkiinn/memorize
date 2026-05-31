@@ -91,6 +91,8 @@
         overlay.querySelector('.tab[data-tab="users"]').hidden = false;
         if (window.AdminTab) window.AdminTab.enable();
       }
+      // 管理员状态已确定，整条 tab 栏此刻才一次性显示（CSS .is-account-ready）。
+      overlay.classList.add('is-account-ready');
       accountLoaded = true;
       // Honor a tab requested via deep link (e.g. /admin → #admin → 用户管理),
       // now that admin status is known and the users tab is revealed.

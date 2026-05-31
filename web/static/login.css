@@ -17,7 +17,10 @@ html, body {
 }
 
 body {
-  font-family: 'Lexend', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* 中文用网络字体 Noto Sans SC（黑体，配登录页无衬线风格）：安卓系统 CJK 只有 400/700，
+     500/600 会塌回 400，必须配能提供 600 档的网络字体，font-weight 才对中文真正生效。 */
+  font-family: 'Lexend', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 600;
   background: var(--bg);
   color: var(--ink);
   display: flex;

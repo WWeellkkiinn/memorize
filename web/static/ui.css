@@ -30,6 +30,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Lexend', system-ui, -apple-system, sans-serif;
+  font-weight: 600; /* 安卓 CJK 无 500 档，用 600 才真正变粗（见 style.css 说明） */
   -webkit-text-size-adjust: 100%;
 }
 

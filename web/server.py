@@ -144,6 +144,15 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     response.headers["X-Frame-Options"] = "DENY"
+    # 缓存策略集中一处按 path 裁决（不散落到各路由）：SW 脚本绝不缓存，否则新版 SW
+    # 发不到设备、PWA 永远更新不了缓存的 CSS/JS（本次「更新不生效」的根因）；入口壳 /
+    # /login、manifest、/static 版本化资源统一 no-cache，让 Cloudflare/浏览器每次只做
+    # 廉价条件校验（未变即 304），改动即时到达设备。SW 自己的离线缓存不受此影响。
+    path = request.url.path
+    if path == "/service-worker.js":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    elif path.startswith("/static/") or path in ("/", "/login", "/manifest.webmanifest"):
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
@@ -202,6 +211,7 @@ def manifest():
 
 @app.get("/service-worker.js")
 def service_worker():
+    # Cache-Control（no-store）由 security_headers_middleware 按 path 统一设置。
     return FileResponse(_STATIC / "service-worker.js", media_type="application/javascript")
 
 

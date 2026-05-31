@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Lexend:wght@400;600;700&family=Noto+Serif+SC:wght@400;600;700&display=swap');
 
 :root {
   --bg:             #F3F4F8;
@@ -35,7 +35,11 @@ body {
     radial-gradient(ellipse 80% 40% at 50% 0%, rgba(99, 102, 241, 0.06) 0%, transparent 70%),
     var(--bg);
   color: var(--text);
-  font-family: 'Lora', "PingFang SC", "Microsoft YaHei", "Noto Sans SC", serif;
+  /* 中文用网络字体 Noto Serif SC：安卓系统自带的 Noto Serif CJK 只有 400/700 两档，
+     500/600 全回退成 400（所以早先调字重在手机上看着没变）；改用网络字体才能拿到真正
+     的 600/700。英文仍走 Lora（拉丁优先命中），中文落到 Noto Serif SC，保留宋体观感。 */
+  font-family: 'Lora', 'Noto Serif SC', "PingFang SC", "Microsoft YaHei", serif;
+  font-weight: 600;
   min-height: 100dvh;
   padding: 20px 16px 32px;
   display: flex;
@@ -203,6 +207,7 @@ body {
 .definition {
   font-size: 18px;
   line-height: 1.7;
+  font-weight: 700;
   color: var(--text);
   border-left: 3px solid var(--accent);
   padding-left: 14px;
@@ -241,6 +246,7 @@ body {
 
 .example-zh {
   font-size: 17px;
+  font-weight: 700;
   color: var(--text);
   margin-top: 6px;
   line-height: 1.5;
@@ -265,7 +271,7 @@ body {
   padding: 9px 6px;
   font-family: inherit;
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--text);
   cursor: pointer;
   min-height: 30px;
