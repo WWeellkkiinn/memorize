@@ -41,41 +41,56 @@ function _makeAudio(word) {
 }
 
 // 释放 Audio 对象并取消未完成的网络请求
-function _evictAudio(a) { if (a) a.src = ''; }
+function _evictAudio(a) { if (a) { a._evicted = true; a.src = ''; } }
+
+// 被释放（src 已清空）的对象不能再播放，复用前必须重建
+function _dead(a) { return !a || a._evicted || !a.src; }
+
+// 播放，失败（未加载完 / 对象损坏）时若仍是当前词，重建并重播一次（防死循环）
+function _playWithRetry(a) {
+  if (!a) return;
+  a.play().catch(() => {
+    if (a !== _audio) return;          // 已切到别的词，放弃
+    const w = a._word;
+    _evictAudio(a);
+    _audio = _makeAudio(w);
+    _audio.play().catch(() => {});     // 只重试一次
+  });
+}
 
 // word 传入时渲染新词（自动播放，优先复用预加载缓存）；不传时重播当前词
 function speakWord(word) {
   if (word) {
-    if (_audioNext?._word === word) {
+    if (_audioNext?._word === word && !_dead(_audioNext)) {
       _evictAudio(_audioPrev);     // 丢弃两步前的音频
       _audioPrev = _audio;
       _audio = _audioNext;
       _audioNext = null;
-    } else if (_audioPrev?._word === word) {
+    } else if (_audioPrev?._word === word && !_dead(_audioPrev)) {
       _audio = _audioPrev;
       _audioPrev = null;
       if (!_audio.paused && !_audio.ended) return; // already playing from early trigger
-    } else if (_audio?._word === word) {
+    } else if (_audio?._word === word && !_dead(_audio)) {
       if (!_audio.paused && !_audio.ended) return; // already playing from early trigger (forward nav)
     } else {
       _evictAudio(_audioPrev);     // 丢弃两步前的音频
       _audioPrev = _audio;
       _audio = _makeAudio(word);
     }
-  } else if (_audio?._word !== state.word?.word) {
-    // no-arg replay but _audio is stale (mid-transition) — rebuild on demand
+  } else if (_dead(_audio) || _audio?._word !== state.word?.word) {
+    // no-arg replay but _audio is stale/dead — rebuild on demand
     if (state.word?.word) _audio = _makeAudio(state.word.word);
   }
   if (!_audio) return;
-  if (_audio.ended) {
-    // Some Android browsers won't replay an ended audio — recreate it
+  if (_audio.ended || _dead(_audio)) {
+    // ended 或已被释放的对象都无法复播，重建
     const w = _audio._word;
     _evictAudio(_audio);
     _audio = _makeAudio(w);
   } else {
     _audio.currentTime = 0;
   }
-  _audio.play().catch(() => {});
+  _playWithRetry(_audio);
 }
 
 function _stopCurrent() {
@@ -678,8 +693,9 @@ async function _commitSwipe() {
   if (_audioPrev) {
     _audio = _audioPrev; // update _audio immediately so no-arg speakWord() plays correct word
     _audioPrev = null;
+    if (_dead(_audio)) _audio = _makeAudio(state.prev?.word || _audio._word);
     _audio.currentTime = 0;
-    _audio.play().catch(() => {});
+    _playWithRetry(_audio);
   }
 
   // Batch all layout reads before any writes to avoid forced reflow
