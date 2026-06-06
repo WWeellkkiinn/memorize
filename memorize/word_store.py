@@ -32,16 +32,21 @@ def _load_scheduler() -> Scheduler:
 
 _fsrs = _load_scheduler()
 
+# owner_id partitions the dictionary per user: a word belongs to one user's
+# library, so two users can own a same-spelling word with different definitions.
+# owner_id IS NULL means a legacy/shared word that every user studies.
 _CREATE_WORDS = """
 CREATE TABLE IF NOT EXISTS words (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    word        TEXT UNIQUE NOT NULL,
+    word        TEXT NOT NULL,
     phonetic    TEXT NOT NULL DEFAULT '',
     pos         TEXT NOT NULL DEFAULT '',
     definition  TEXT NOT NULL DEFAULT '',
     examples    TEXT NOT NULL DEFAULT '[]',
     rank        INTEGER NOT NULL DEFAULT 0,
-    morphemes   TEXT DEFAULT NULL
+    morphemes   TEXT DEFAULT NULL,
+    owner_id    INTEGER,
+    UNIQUE(owner_id, word)
 )
 """
 
@@ -118,16 +123,58 @@ class WordStore:
         with self._conn() as conn:
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute(_CREATE_WORDS)
-            self._migrate_cards(conn)
-            self._migrate_review_logs(conn)
-            conn.execute(_CREATE_IDX_DUE)
-            # Migration: words.rank / words.morphemes
+            # Migration: words.rank / words.morphemes (must exist before the
+            # owner_id rebuild copies them across).
             word_cols = {r[1] for r in conn.execute("PRAGMA table_info(words)")}
             if "rank" not in word_cols:
                 conn.execute("ALTER TABLE words ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
             if "morphemes" not in word_cols:
                 conn.execute("ALTER TABLE words ADD COLUMN morphemes TEXT DEFAULT NULL")
+            self._migrate_cards(conn)
+            self._migrate_review_logs(conn)
+            conn.execute(_CREATE_IDX_DUE)
             conn.commit()
+        # Runs on its own connection: the FK-safe table rebuild needs
+        # foreign_keys OFF and must be outside any open transaction.
+        self._migrate_words_owner()
+
+    def _migrate_words_owner(self) -> None:
+        """Add words.owner_id and switch uniqueness from `word` to `(owner_id, word)`.
+        Legacy single-UNIQUE-word tables are rebuilt in place, preserving every id
+        so cards/review_logs foreign keys stay valid; existing rows get owner_id NULL
+        (shared). No-op once owner_id already exists."""
+        conn = sqlite3.connect(self._path, timeout=10.0)
+        conn.isolation_level = None  # autocommit, so we control BEGIN/COMMIT
+        try:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(words)")}
+            if not cols or "owner_id" in cols:
+                return
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute("BEGIN")
+            conn.execute(
+                "CREATE TABLE words_new ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " word TEXT NOT NULL,"
+                " phonetic TEXT NOT NULL DEFAULT '',"
+                " pos TEXT NOT NULL DEFAULT '',"
+                " definition TEXT NOT NULL DEFAULT '',"
+                " examples TEXT NOT NULL DEFAULT '[]',"
+                " rank INTEGER NOT NULL DEFAULT 0,"
+                " morphemes TEXT DEFAULT NULL,"
+                " owner_id INTEGER,"
+                " UNIQUE(owner_id, word))"
+            )
+            conn.execute(
+                "INSERT INTO words_new(id, word, phonetic, pos, definition, examples, rank, morphemes, owner_id)"
+                " SELECT id, word, phonetic, pos, definition, examples, rank, morphemes, NULL FROM words"
+            )
+            conn.execute("DROP TABLE words")
+            conn.execute("ALTER TABLE words_new RENAME TO words")
+            conn.execute("COMMIT")
+            conn.execute("PRAGMA foreign_keys = ON")
+            log.info("Migrated words: added owner_id; uniqueness now (owner_id, word)")
+        finally:
+            conn.close()
 
     def _migrate_cards(self, conn: sqlite3.Connection) -> None:
         """Create cards table, rebuilding the legacy single-user schema to a per-user one."""
@@ -174,14 +221,16 @@ class WordStore:
             conn.commit()
 
     def init_cards_for_user(self, user_id: int) -> None:
-        """Give a user a fresh FSRS card for every word they don't have one for yet."""
+        """Give a user a fresh FSRS card for every word in their own library that they
+        don't have one for yet. A user's library is the words they own plus any legacy
+        shared words (owner_id NULL); they never get cards for another user's words."""
         now = _now_utc()
         card_json = json.dumps(Card().to_dict())
         with self._conn() as conn:
             conn.execute(
                 "INSERT OR IGNORE INTO cards(user_id, word_id, fsrs_card, due, stability, reps)"
-                " SELECT ?, id, ?, ?, 0.0, 0 FROM words",
-                (user_id, card_json, _iso(now)),
+                " SELECT ?, id, ?, ?, 0.0, 0 FROM words WHERE owner_id = ? OR owner_id IS NULL",
+                (user_id, card_json, _iso(now), user_id),
             )
             conn.commit()
 
@@ -195,19 +244,23 @@ class WordStore:
         definition: str = "",
         examples: list[dict] | None = None,
         rank: int = 0,
+        owner_id: int | None = None,
     ) -> int | None:
-        """Insert a word; return its id, or None if it already exists."""
+        """Insert a word into a user's library (owner_id); return its id, or None if
+        that user already owns it."""
         ex_json = json.dumps(examples or [], ensure_ascii=False)
         with self._conn() as conn:
             cur = conn.execute(
-                "INSERT OR IGNORE INTO words(word, phonetic, pos, definition, examples, rank)"
-                " VALUES(?,?,?,?,?,?)",
-                (word.lower(), phonetic, pos, definition, ex_json, rank),
+                "INSERT OR IGNORE INTO words(word, phonetic, pos, definition, examples, rank, owner_id)"
+                " VALUES(?,?,?,?,?,?,?)",
+                (word.lower(), phonetic, pos, definition, ex_json, rank, owner_id),
             )
             conn.commit()
             if cur.lastrowid and cur.rowcount:
                 return cur.lastrowid
-            row = conn.execute("SELECT id FROM words WHERE word=?", (word.lower(),)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM words WHERE word=? AND owner_id IS ?", (word.lower(), owner_id)
+            ).fetchone()
             return row["id"] if row else None
 
     def init_card(self, word_id: int, user_id: int = DEFAULT_USER_ID) -> None:
