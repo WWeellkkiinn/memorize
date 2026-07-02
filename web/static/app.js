@@ -426,6 +426,9 @@ function buildCardHTML(word) {
         `<span class="speak-btn" role="button" tabindex="0" aria-label="朗读">🔊</span>` +
       `</div>` +
     `</div>` +
+    (word.mnemonic_image
+      ? `<img class="mnemonic-image" src="/static/${escHtml(word.mnemonic_image)}" alt="">`
+      : '') +
     `<div class="answer-area">` +
       `<div class="hint-area"><div class="hint-text">单击查看答案，3 秒后自动揭示</div></div>` +
       `<div class="definition invisible">${escHtml(word.definition || '')}</div>` +

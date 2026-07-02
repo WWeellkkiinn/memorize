@@ -213,6 +213,17 @@ body {
   padding-left: 14px;
 }
 
+/* ── Mnemonic Image ────────────────────────────────────────────────────────── */
+
+.mnemonic-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  margin: 0 0 16px;
+  border-radius: 16px;
+}
+
 /* ── Examples ──────────────────────────────────────────────────────────────── */
 
 .examples {

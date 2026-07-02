@@ -5,6 +5,7 @@ services:
       - "127.0.0.1:8881:8881"
     volumes:
       - memorize-db:/data/memorize
+      - ./web/static/mnemonics:/app/web/static/mnemonics
     env_file: .env
     restart: unless-stopped
     # Cap memory so a spike/leak in this container OOM-kills only itself instead of

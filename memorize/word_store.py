@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS words (
     rank        INTEGER NOT NULL DEFAULT 0,
     morphemes   TEXT DEFAULT NULL,
     owner_id    INTEGER,
+    mnemonic_image TEXT DEFAULT NULL,
     UNIQUE(owner_id, word)
 )
 """
@@ -84,7 +85,7 @@ _CREATE_IDX_DUE = "CREATE INDEX IF NOT EXISTS idx_cards_due ON cards(user_id, du
 # scoped to a user_id, so the first bound parameter of every query is the user.
 _WORD_COLS = """
     SELECT w.id, w.word, w.phonetic, w.pos, w.definition, w.examples, w.morphemes,
-           c.stability, c.reps, c.due
+           w.mnemonic_image, c.stability, c.reps, c.due
     FROM words w
     JOIN cards c ON c.word_id = w.id AND c.user_id = ?
 """
@@ -130,6 +131,8 @@ class WordStore:
                 conn.execute("ALTER TABLE words ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
             if "morphemes" not in word_cols:
                 conn.execute("ALTER TABLE words ADD COLUMN morphemes TEXT DEFAULT NULL")
+            if "mnemonic_image" not in word_cols:
+                conn.execute("ALTER TABLE words ADD COLUMN mnemonic_image TEXT DEFAULT NULL")
             self._migrate_cards(conn)
             self._migrate_review_logs(conn)
             conn.execute(_CREATE_IDX_DUE)
@@ -162,6 +165,7 @@ class WordStore:
                 " rank INTEGER NOT NULL DEFAULT 0,"
                 " morphemes TEXT DEFAULT NULL,"
                 " owner_id INTEGER,"
+                " mnemonic_image TEXT DEFAULT NULL,"
                 " UNIQUE(owner_id, word))"
             )
             conn.execute(
